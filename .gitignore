@@ -20,6 +20,9 @@ coverage*.xml
 ## Local runtime data (uploads, registered manifests)
 data/
 
+## Local working notes (never published)
+notes/
+
 ## OS noise
 .DS_Store
 Thumbs.db
