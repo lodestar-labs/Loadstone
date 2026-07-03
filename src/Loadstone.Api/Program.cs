@@ -71,11 +71,14 @@ try
     app.UseSwagger();
     app.UseSwaggerUI(ui => ui.DocumentTitle = "Loadstone API");
 
+    // The operations dashboard is a static, dependency-free page served at "/".
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+
     app.MapDatasetEndpoints();
     app.MapImportEndpoints();
     app.MapCodeListEndpoints();
     app.MapHealthChecks("/health");
-    app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 
     app.Run();
 }

@@ -1,0 +1,5 @@
+title: Loadstone
+description: Import data of any shape into a relational database, declaratively.
+theme: jekyll-theme-primer
+exclude:
+  - demo-storyboard.md

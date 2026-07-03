@@ -59,8 +59,9 @@ cd Loadstone
 docker compose up --build
 ```
 
-Open http://localhost:8080/swagger. The sample **orders** dataset is registered and its
-tables are created automatically. Import the sample file:
+Open http://localhost:8080 — the operations dashboard, with the sample **orders**
+dataset registered and its tables created automatically (the raw API lives at
+`/swagger`). Import the sample file from the dashboard's upload form, or:
 
 ```bash
 curl -X POST "http://localhost:8080/api/datasets/orders/imports" \
@@ -179,6 +180,9 @@ builder.Services.AddLoadstone().AddDataset<OrdersDataset>();
 - **The API itself** — `/api/imports` for job state and counts, `/{id}/events` for the
   stage timeline, `/{id}/rejections` for row-level failures with source locations, and
   `/health` for probes.
+- **The dashboard** — a zero-dependency operations UI at `/`: live job table, per-job
+  timeline and rejection browser, dataset manifests and generated schema, and code-list
+  management.
 
 ## Running on Azure
 
@@ -214,7 +218,7 @@ queue for Service Bus later is implementing one small interface, not a rewrite.
 - PostgreSQL provider (`COPY` + `INSERT ... ON CONFLICT`) behind the existing writer contract
 - Azure Blob file store and Service Bus queue transport
 - Dataset-level webhooks (job completed / dead-lettered)
-- A small dashboard UI over the jobs API
+- Published benchmarks
 - Parquet reader
 
 Contributions toward any of these (or a good case for something else) are very welcome —

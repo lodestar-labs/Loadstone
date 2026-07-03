@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loadstone</title>
+<style>
+  :root {
+    --ink: #1f2933; --muted: #52606d; --line: #d9e2ec; --accent: #1d4ed8;
+    --accent-soft: #eff6ff; --panel: #f8fafc; --good: #047857; --good-soft: #ecfdf5;
+    --warn: #b45309; --warn-soft: #fffbeb; --bad: #b91c1c; --bad-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--panel); font-size: 14px; }
+  header { background: #0f172a; color: #f8fafc; padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 52px; }
+  header h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.01em; }
+  header nav { display: flex; gap: 4px; }
+  header nav button {
+    background: none; border: none; color: #cbd5e1; padding: 8px 14px; cursor: pointer;
+    font-size: 0.9rem; border-radius: 6px; font-family: inherit;
+  }
+  header nav button:hover { color: #fff; background: #1e293b; }
+  header nav button.active { color: #fff; background: #1d4ed8; }
+  header .spacer { flex: 1; }
+  header a { color: #94a3b8; font-size: 0.85rem; text-decoration: none; }
+  header a:hover { color: #fff; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--accent-soft); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+  .badge.Pending { background: #f1f5f9; color: #475569; }
+  .badge.Processing { background: var(--accent-soft); color: var(--accent); }
+  .badge.Succeeded { background: var(--good-soft); color: var(--good); }
+  .badge.CompletedWithRejections { background: var(--warn-soft); color: var(--warn); }
+  .badge.Failed, .badge.DeadLettered { background: var(--bad-soft); color: var(--bad); }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  select, input[type="text"], textarea {
+    font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+  }
+  button.primary {
+    font: inherit; background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 16px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:hover { background: #1e40af; }
+  button.primary:disabled { background: #94a3b8; cursor: default; }
+  button.ghost { font: inherit; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .muted { color: var(--muted); }
+  .mono { font-family: Consolas, monospace; font-size: 0.85em; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { padding: 28px; text-align: center; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  dl.props { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; margin: 0; font-size: 0.88rem; }
+  dl.props dt { color: var(--muted); }
+  dl.props dd { margin: 0; word-break: break-all; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 8px; overflow: auto; font-size: 0.82rem; max-height: 420px; }
+  .toast {
+    position: fixed; bottom: 22px; right: 22px; background: #0f172a; color: #fff;
+    padding: 12px 18px; border-radius: 8px; font-size: 0.9rem; opacity: 0; transition: opacity .25s; pointer-events: none;
+    max-width: 420px;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--bad); }
+  .back { margin-bottom: 14px; }
+  .health { font-size: 0.8rem; }
+  .health .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #94a3b8; }
+  .health.ok .dot { background: #22c55e; }
+  .health.down .dot { background: #ef4444; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Loadstone</h1>
+  <nav>
+    <button data-view="imports" class="active">Imports</button>
+    <button data-view="datasets">Datasets</button>
+    <button data-view="codelists">Code lists</button>
+  </nav>
+  <div class="spacer"></div>
+  <span class="health" id="health"><span class="dot"></span><span id="healthText">checking…</span></span>
+  <a href="/swagger">API</a>
+</header>
+
+<main>
+  <!-- Imports -->
+  <section id="view-imports">
+    <div class="card">
+      <h2>New import</h2>
+      <div class="controls">
+        <select id="uploadDataset"></select>
+        <input type="file" id="uploadFile">
+        <button class="primary" id="uploadBtn">Upload &amp; queue</button>
+        <span class="muted">xml · json · csv · zip — format is inferred from the file name</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Import jobs</h2>
+      <div class="controls">
+        <select id="filterDataset"><option value="">All datasets</option></select>
+        <select id="filterStatus">
+          <option value="">All statuses</option>
+          <option>Pending</option><option>Processing</option><option>Succeeded</option>
+          <option>CompletedWithRejections</option><option>Failed</option><option>DeadLettered</option>
+        </select>
+        <span class="muted" id="jobsRefreshed"></span>
+      </div>
+      <div id="jobsTable"></div>
+    </div>
+  </section>
+
+  <!-- Job detail -->
+  <section id="view-job" style="display:none">
+    <div class="back"><button class="ghost" onclick="showView('imports')">&larr; All imports</button></div>
+    <div class="card"><h2 id="jobTitle">Job</h2><dl class="props" id="jobProps"></dl></div>
+    <div class="grid2">
+      <div class="card"><h2>Timeline</h2><div id="jobEvents"></div></div>
+      <div class="card"><h2>Rejected records</h2><div id="jobRejections"></div></div>
+    </div>
+  </section>
+
+  <!-- Datasets -->
+  <section id="view-datasets" style="display:none">
+    <div class="card">
+      <h2>Registered datasets</h2>
+      <div id="datasetsTable"></div>
+    </div>
+    <div class="card" id="manifestCard" style="display:none">
+      <h2 id="manifestTitle">Manifest</h2>
+      <div class="controls">
+        <button class="ghost" id="schemaBtn">View generated schema</button>
+      </div>
+      <pre id="manifestBody"></pre>
+    </div>
+  </section>
+
+  <!-- Code lists -->
+  <section id="view-codelists" style="display:none">
+    <div class="grid2">
+      <div class="card">
+        <h2>Code lists</h2>
+        <div id="codeListsTable"></div>
+      </div>
+      <div class="card">
+        <h2 id="codesTitle">Codes</h2>
+        <div id="codesTable"><div class="empty">Select a list</div></div>
+        <div id="codesEditor" style="display:none">
+          <p class="muted">Add or update codes (JSON array):</p>
+          <textarea id="codesInput" rows="4" style="width:100%" placeholder='[ { "code": "DK", "description": "Denmark" } ]'></textarea>
+          <div class="controls" style="margin-top:8px">
+            <button class="primary" id="codesSave">Save codes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var currentView = "imports";
+  var currentJobId = null;
+  var currentList = null;
+  var pollTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function toast(message, isError) {
+    var el = $("toast");
+    el.textContent = message;
+    el.className = "toast show" + (isError ? " error" : "");
+    setTimeout(function () { el.className = "toast"; }, 4000);
+  }
+
+  function api(path, options) {
+    return fetch(path, options).then(function (response) {
+      if (!response.ok) {
+        return response.text().then(function (body) {
+          var message = "HTTP " + response.status;
+          try { message = JSON.parse(body).error || message; } catch (ignored) { }
+          throw new Error(message);
+        });
+      }
+      var type = response.headers.get("content-type") || "";
+      return type.includes("json") ? response.json() : response.text();
+    });
+  }
+
+  function fmtDate(value) {
+    if (!value) { return ""; }
+    var d = new Date(value);
+    return d.toLocaleDateString() + " " + d.toLocaleTimeString();
+  }
+
+  function duration(job) {
+    if (!job.startedAt) { return ""; }
+    var end = job.completedAt ? new Date(job.completedAt) : new Date();
+    var ms = end - new Date(job.startedAt);
+    if (ms < 0) { return ""; }
+    return ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s";
+  }
+
+  window.showView = function (view) {
+    currentView = view;
+    ["imports", "job", "datasets", "codelists"].forEach(function (name) {
+      $("view-" + name).style.display = name === view ? "" : "none";
+    });
+    document.querySelectorAll("header nav button").forEach(function (button) {
+      button.className = button.dataset.view === view ? "active" : "";
+    });
+    if (view === "imports") { refreshJobs(); }
+    if (view === "datasets") { refreshDatasets(); }
+    if (view === "codelists") { refreshCodeLists(); }
+  };
+
+  document.querySelectorAll("header nav button").forEach(function (button) {
+    button.addEventListener("click", function () { showView(button.dataset.view); });
+  });
+
+  // ---- health ----
+  function refreshHealth() {
+    fetch("/health").then(function (r) {
+      $("health").className = "health " + (r.ok ? "ok" : "down");
+      $("healthText").textContent = r.ok ? "healthy" : "degraded";
+    }).catch(function () {
+      $("health").className = "health down";
+      $("healthText").textContent = "unreachable";
+    });
+  }
+
+  // ---- imports ----
+  function refreshJobs() {
+    if (currentView !== "imports") { return; }
+    var query = [];
+    var dataset = $("filterDataset").value;
+    var status = $("filterStatus").value;
+    if (dataset) { query.push("dataset=" + encodeURIComponent(dataset)); }
+    if (status) { query.push("status=" + encodeURIComponent(status)); }
+    api("/api/imports" + (query.length ? "?" + query.join("&") : "")).then(function (jobs) {
+      $("jobsRefreshed").textContent = "updated " + new Date().toLocaleTimeString();
+      if (!jobs.length) {
+        $("jobsTable").innerHTML = '<div class="empty">No import jobs yet — upload a file above.</div>';
+        return;
+      }
+      var rows = jobs.map(function (job) {
+        return '<tr class="clickable" onclick="openJob(\'' + job.id + '\')">' +
+          "<td>" + esc(job.fileName) + '<br><span class="muted mono">' + job.id.slice(0, 8) + "</span></td>" +
+          "<td>" + esc(job.dataset) + "</td>" +
+          '<td><span class="badge ' + job.status + '">' + job.status + "</span></td>" +
+          '<td class="num">' + job.recordsRead + "</td>" +
+          '<td class="num">' + job.recordsRejected + "</td>" +
+          '<td class="num">' + job.rowsInserted + " / " + job.rowsUpdated + "</td>" +
+          "<td>" + fmtDate(job.createdAt) + "</td>" +
+          "<td>" + duration(job) + "</td></tr>";
+      }).join("");
+      $("jobsTable").innerHTML =
+        "<table><thead><tr><th>File</th><th>Dataset</th><th>Status</th>" +
+        '<th class="num">Read</th><th class="num">Rejected</th><th class="num">Ins / Upd</th>' +
+        "<th>Created</th><th>Duration</th></tr></thead><tbody>" + rows + "</tbody></table>";
+    }).catch(function (error) { toast(error.message, true); });
+  }
+
+  window.openJob = function (id) {
+    currentJobId = id;
+    showView("job");
+    refreshJob();
+  };
+
+  function refreshJob() {
+    if (currentView !== "job" || !currentJobId) { return; }
+    api("/api/imports/" + currentJobId).then(function (job) {
+      $("jobTitle").innerHTML = esc(job.fileName) + ' &nbsp;<span class="badge ' + job.status + '">' + job.status + "</span>";
+      var props = [
+        ["Job id", '<span class="mono">' + job.id + "</span>"],
+        ["Dataset", esc(job.dataset)], ["Queue", esc(job.queue)], ["Format", job.format],
+        ["Correlation id", '<span class="mono">' + esc(job.correlationId) + "</span>"],
+        ["Attempt", job.attempt + " of " + job.maxAttempts],
+        ["Created", fmtDate(job.createdAt)], ["Started", fmtDate(job.startedAt)],
+        ["Completed", fmtDate(job.completedAt)], ["Duration", duration(job)],
+        ["Records read", job.recordsRead], ["Records rejected", job.recordsRejected],
+        ["Rows inserted", job.rowsInserted], ["Rows updated", job.rowsUpdated],
+      ];
+      if (job.error) { props.push(["Error", '<span style="color:var(--bad)">' + esc(job.error) + "</span>"]); }
+      if (job.requestedBy) { props.push(["Requested by", esc(job.requestedBy)]); }
+      $("jobProps").innerHTML = props.map(function (pair) {
+        return "<dt>" + pair[0] + "</dt><dd>" + pair[1] + "</dd>";
+      }).join("");
+    }).catch(function (error) { toast(error.message, true); });
+
+    api("/api/imports/" + currentJobId + "/events").then(function (events) {
+      $("jobEvents").innerHTML = events.length
+        ? "<table><tbody>" + events.map(function (e) {
+            return "<tr><td class=\"muted\" style=\"white-space:nowrap\">" + fmtDate(e.at) + "</td>" +
+              "<td><strong>" + esc(e.stage) + "</strong><br>" + esc(e.message) +
+              (e.elapsedMs ? ' <span class="muted">(' + Math.round(e.elapsedMs) + " ms)</span>" : "") + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="empty">No events yet.</div>';
+    });
+
+    api("/api/imports/" + currentJobId + "/rejections?top=500").then(function (rows) {
+      $("jobRejections").innerHTML = rows.length
+        ? "<table><thead><tr><th>Where</th><th>Field</th><th>Problem</th></tr></thead><tbody>" +
+          rows.map(function (r) {
+            var where = esc(r.entity) + (r.sourceLine ? " · line " + r.sourceLine : "") +
+              (r.sourcePath ? '<br><span class="muted">' + esc(r.sourcePath) + "</span>" : "");
+            return "<tr><td>" + where + "</td><td>" + esc(r.field) + "</td><td>" + esc(r.reason) +
+              (r.rawValue ? '<br><span class="mono muted">raw: ' + esc(r.rawValue) + "</span>" : "") + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="empty">No rejected records.</div>';
+    });
+  }
+
+  $("uploadBtn").addEventListener("click", function () {
+    var dataset = $("uploadDataset").value;
+    var input = $("uploadFile");
+    if (!dataset) { toast("Register a dataset first.", true); return; }
+    if (!input.files.length) { toast("Choose a file to import.", true); return; }
+    var form = new FormData();
+    form.append("file", input.files[0]);
+    $("uploadBtn").disabled = true;
+    api("/api/datasets/" + encodeURIComponent(dataset) + "/imports", { method: "POST", body: form })
+      .then(function (result) {
+        toast("Queued as job " + result.jobId.slice(0, 8) + " on queue '" + result.queue + "'.");
+        input.value = "";
+        refreshJobs();
+      })
+      .catch(function (error) { toast(error.message, true); })
+      .finally(function () { $("uploadBtn").disabled = false; });
+  });
+
+  $("filterDataset").addEventListener("change", refreshJobs);
+  $("filterStatus").addEventListener("change", refreshJobs);
+
+  // ---- datasets ----
+  function loadDatasetOptions() {
+    api("/api/datasets").then(function (datasets) {
+      var options = datasets.map(function (d) {
+        return '<option value="' + esc(d.name) + '">' + esc(d.name) + "</option>";
+      }).join("");
+      $("uploadDataset").innerHTML = options || '<option value="">(no datasets)</option>';
+      $("filterDataset").innerHTML = '<option value="">All datasets</option>' + options;
+    }).catch(function () { });
+  }
+
+  function refreshDatasets() {
+    api("/api/datasets").then(function (datasets) {
+      if (!datasets.length) {
+        $("datasetsTable").innerHTML =
+          '<div class="empty">No datasets registered. PUT a manifest to /api/datasets/{name} or drop one in the manifest directory.</div>';
+        return;
+      }
+      $("datasetsTable").innerHTML =
+        "<table><thead><tr><th>Name</th><th>Version</th><th>Description</th><th>Queue</th><th>Entities</th><th></th></tr></thead><tbody>" +
+        datasets.map(function (d) {
+          return "<tr><td><strong>" + esc(d.name) + "</strong></td><td>" + esc(d.version) + "</td>" +
+            "<td>" + esc(d.description || "") + "</td><td>" + esc(d.queue) + "</td>" +
+            "<td>" + d.entities.map(esc).join(" → ") + "</td>" +
+            '<td><button class="ghost" onclick="openManifest(\'' + esc(d.name) + '\')">Manifest</button></td></tr>';
+        }).join("") + "</tbody></table>";
+    }).catch(function (error) { toast(error.message, true); });
+  }
+
+  window.openManifest = function (name) {
+    api("/api/datasets/" + encodeURIComponent(name)).then(function (manifest) {
+      $("manifestCard").style.display = "";
+      $("manifestTitle").textContent = "Manifest — " + name;
+      $("manifestBody").textContent =
+        typeof manifest === "string" ? manifest : JSON.stringify(manifest, null, 2);
+      $("schemaBtn").onclick = function () {
+        api("/api/datasets/" + encodeURIComponent(name) + "/schema").then(function (ddl) {
+          $("manifestTitle").textContent = "Generated schema — " + name;
+          $("manifestBody").textContent = ddl;
+        });
+      };
+    }).catch(function (error) { toast(error.message, true); });
+  };
+
+  // ---- code lists ----
+  function refreshCodeLists() {
+    api("/api/codelists").then(function (lists) {
+      $("codeListsTable").innerHTML = lists.length
+        ? "<table><thead><tr><th>List</th><th class=\"num\">Codes</th></tr></thead><tbody>" +
+          lists.map(function (l) {
+            return '<tr class="clickable" onclick="openCodes(\'' + esc(l.name) + '\')"><td>' +
+              esc(l.name) + '</td><td class="num">' + l.codeCount + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="empty">No code lists yet. Select a name and save codes to create one, or let autoCreate fill lists during imports.</div>';
+    }).catch(function (error) { toast(error.message, true); });
+  }
+
+  window.openCodes = function (list) {
+    currentList = list;
+    $("codesTitle").textContent = "Codes — " + list;
+    $("codesEditor").style.display = "";
+    api("/api/codelists/" + encodeURIComponent(list)).then(function (codes) {
+      $("codesTable").innerHTML = codes.length
+        ? "<table><thead><tr><th>Code</th><th>Description</th><th class=\"num\">Id</th></tr></thead><tbody>" +
+          codes.map(function (c) {
+            return "<tr><td class=\"mono\">" + esc(c.code) + "</td><td>" + esc(c.description || "") +
+              '</td><td class="num">' + (c.id ?? "") + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="empty">List is empty.</div>';
+    });
+  };
+
+  $("codesSave").addEventListener("click", function () {
+    if (!currentList) { return; }
+    var payload;
+    try { payload = JSON.parse($("codesInput").value); }
+    catch (error) { toast("Not valid JSON: " + error.message, true); return; }
+    api("/api/codelists/" + encodeURIComponent(currentList), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(function (result) {
+      toast("Saved " + result.upserted + " code(s) to '" + currentList + "'.");
+      $("codesInput").value = "";
+      openCodes(currentList);
+      refreshCodeLists();
+    }).catch(function (error) { toast(error.message, true); });
+  });
+
+  // ---- boot ----
+  loadDatasetOptions();
+  refreshJobs();
+  refreshHealth();
+  pollTimer = setInterval(function () {
+    refreshHealth();
+    if (currentView === "imports") { refreshJobs(); }
+    if (currentView === "job") { refreshJob(); }
+  }, 3000);
+})();
+</script>
+</body>
+</html>

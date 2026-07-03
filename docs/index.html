@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loadstone — import data of any shape into a relational database</title>
+<meta name="description" content="Loadstone turns XML, JSON, and CSV files into clean relational rows: declarative manifests, deep hierarchies, pluggable lookups, durable queues, and row-level error forensics.">
+<style>
+  :root {
+    --ink: #1f2933; --muted: #52606d; --line: #d9e2ec; --accent: #1d4ed8;
+    --accent-soft: #eff6ff; --panel: #f8fafc; --dark: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); line-height: 1.6; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--accent); }
+
+  .hero { background: linear-gradient(160deg, #0f172a 0%, #1e293b 70%, #1d4ed8 160%); color: #f8fafc; padding: 72px 0 64px; }
+  .hero h1 { font-size: 2.6rem; margin: 0 0 14px; letter-spacing: -0.02em; line-height: 1.15; }
+  .hero p.lede { font-size: 1.2rem; color: #cbd5e1; max-width: 700px; margin: 0 0 28px; }
+  .hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 22px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+  .btn.primary { background: #fff; color: var(--dark); }
+  .btn.primary:hover { background: #e2e8f0; }
+  .btn.outline { border: 1px solid #64748b; color: #e2e8f0; }
+  .btn.outline:hover { border-color: #fff; color: #fff; }
+  .hero pre { background: rgba(2, 6, 23, 0.6); border: 1px solid #334155; margin-top: 34px; }
+
+  section { padding: 56px 0 8px; }
+  h2 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 860px) { .features { grid-template-columns: 1fr; } }
+  .feature { border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; background: #fff; }
+  .feature h3 { margin: 0 0 8px; font-size: 1.02rem; }
+  .feature p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+
+  pre { background: var(--dark); color: #e2e8f0; padding: 18px 20px; border-radius: 10px; overflow-x: auto; font-size: 0.85rem; line-height: 1.55; }
+  code { font-family: Consolas, "Cascadia Code", monospace; }
+  p code, li code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+  .links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 10px; }
+  @media (max-width: 640px) { .links { grid-template-columns: 1fr; } }
+  .link-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; text-decoration: none; display: block; }
+  .link-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .link-card strong { color: var(--ink); display: block; }
+  .link-card span { color: var(--muted); font-size: 0.88rem; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 64px; padding: 22px 0 40px; color: var(--muted); font-size: 0.88rem; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>Import data of any shape<br>into a relational database.</h1>
+    <p class="lede">
+      Loadstone turns nested XML, JSON, and curated CSV files into clean relational rows —
+      driven by one declarative manifest per dataset, with durable queues, pluggable
+      reference-data lookups, and row-level error forensics built in.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/KadjiProjects/Loadstone">View on GitHub</a>
+      <a class="btn outline" href="manifest-reference.html">Manifest reference</a>
+      <a class="btn outline" href="architecture-overview.html">Architecture</a>
+    </div>
+    <pre><code>git clone https://github.com/KadjiProjects/Loadstone.git
+cd Loadstone
+docker compose up --build
+# open http://localhost:8080 — dashboard, sample dataset, and tables are ready
+curl -X POST "http://localhost:8080/api/datasets/orders/imports" -F "file=@samples/orders/orders.xml"</code></pre>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>One manifest replaces every hand-written importer</h2>
+    <p class="sub">Declare the shape once; Loadstone derives everything else.</p>
+    <div class="features">
+      <div class="feature">
+        <h3>Any format in, tables out</h3>
+        <p>XML, JSON, and CSV (including zip-of-CSVs hierarchies) stream through one canonical
+        record model. Same manifest, same tables, three formats — files of any size, bounded memory.</p>
+      </div>
+      <div class="feature">
+        <h3>Hierarchies are first-class</h3>
+        <p>Parents with nested, optional, repeating children to any depth. Bulk staging and
+        set-based merges wire the foreign keys automatically — no ORM, no per-row round trips.</p>
+      </div>
+      <div class="feature">
+        <h3>Bad rows don't kill good files</h3>
+        <p>Records that fail validation or lookup resolution are quarantined with the source
+        line, field, raw value, and reason. The rest of the file imports. Re-runs are idempotent.</p>
+      </div>
+      <div class="feature">
+        <h3>Bring your own reference data</h3>
+        <p>Built-in code lists, configuration-defined SQL lookups against any existing database,
+        or a custom provider class. Per-field policies: reject record, reject file, default, auto-create.</p>
+      </div>
+      <div class="feature">
+        <h3>Durable queues, no broker</h3>
+        <p>Every dataset gets a named, database-backed queue: restart-safe, multi-worker,
+        exponential-backoff retries, dead-lettering. Nothing extra to install or operate.</p>
+      </div>
+      <div class="feature">
+        <h3>Observable end to end</h3>
+        <p>A live dashboard, structured logs, OpenTelemetry traces and metrics, correlation ids,
+        job timelines, and queryable rejection reports — over HTTP, not buried in log files.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap split">
+    <div>
+      <h2>Declare it</h2>
+      <p class="sub">Entities, types, keys, lookups — one JSON document.</p>
+      <pre><code>{
+  "name": "orders",
+  "root": {
+    "name": "Order",
+    "table": "Orders",
+    "keyColumn": "OrderId",
+    "naturalKey": [ "OrderNumber" ],
+    "fields": [
+      { "name": "OrderNumber", "required": true },
+      { "name": "OrderDate", "type": "date" },
+      { "name": "Country",
+        "lookup": { "list": "countries",
+                    "onMissing": "autoCreate" } }
+    ],
+    "children": [ { "name": "Line", "table": "OrderLines",
+                    "parentKeyColumn": "OrderId",
+                    "naturalKey": [ "LineNumber" ],
+                    "fields": [ /* ... */ ] } ]
+  }
+}</code></pre>
+    </div>
+    <div>
+      <h2>Run it</h2>
+      <p class="sub">API-first; everything scriptable, everything visible.</p>
+      <pre><code># register (or update) the dataset
+curl -X PUT :8080/api/datasets/orders \
+     --data-binary @orders.dataset.json
+
+# generated DDL, if you want Loadstone
+# to create the target tables
+curl :8080/api/datasets/orders/schema
+
+# queue an import — xml, json, or csv/zip
+curl -X POST :8080/api/datasets/orders/imports \
+     -F "file=@orders.xml"
+
+# watch it: status, timeline, rejections
+curl :8080/api/imports/{jobId}
+curl :8080/api/imports/{jobId}/events
+curl :8080/api/imports/{jobId}/rejections</code></pre>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Documentation</h2>
+    <div class="links">
+      <a class="link-card" href="manifest-reference.html"><strong>Manifest reference</strong><span>Every property of the dataset manifest, with defaults and semantics.</span></a>
+      <a class="link-card" href="recipes.html"><strong>Recipes</strong><span>Nested XML partner feeds, SaaS JSON exports, spreadsheet CSV workflows.</span></a>
+      <a class="link-card" href="architecture-overview.html"><strong>Architecture overview</strong><span>Layer diagram, pipeline flow, and the staging/merge write path.</span></a>
+      <a class="link-card" href="https://github.com/KadjiProjects/Loadstone/blob/main/COMMERCIAL-LICENSE.md"><strong>Licensing</strong><span>Free for self-hosted production use; enterprise and OEM plans.</span></a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Loadstone · source-available under the Business Source License 1.1 ·
+    <a href="https://github.com/KadjiProjects/Loadstone">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
