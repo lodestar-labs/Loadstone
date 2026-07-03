@@ -27,6 +27,14 @@ public sealed class SqlServerImportWriter(
         IAsyncEnumerable<DataRecord> acceptedRoots,
         CancellationToken cancellationToken = default)
     {
+        // Flat datasets take the accelerated path: records stream straight into the
+        // staging table and one atomic MERGE (or INSERT..SELECT) touches the target, so
+        // memory stays constant regardless of file size and retries are always safe.
+        if (context.Manifest.Root.Children.Count == 0)
+        {
+            return await WriteFlatStreamedAsync(context, acceptedRoots, cancellationToken);
+        }
+
         // Entities without a natural key insert unconditionally, so a retried job would
         // duplicate whatever earlier batches already committed. For those datasets the
         // whole job runs in one transaction — nothing is left behind for a retry to
@@ -36,6 +44,129 @@ public sealed class SqlServerImportWriter(
         return singleTransaction
             ? await WriteJobScopedAsync(context, acceptedRoots, cancellationToken)
             : await WriteBatchScopedAsync(context, acceptedRoots, cancellationToken);
+    }
+
+    /// <summary>
+    /// Accelerated single-entity path: bulk-copy the whole stream into one staging table,
+    /// then apply it with a single set-based statement. The statement is atomic, so a
+    /// failed or retried job never leaves partial data behind.
+    /// </summary>
+    private async Task<WriteResult> WriteFlatStreamedAsync(
+        ImportContext context,
+        IAsyncEnumerable<DataRecord> acceptedRoots,
+        CancellationToken cancellationToken)
+    {
+        var entity = context.Manifest.Root;
+        const string stageName = "#ls_flat_stage";
+        const string outName = "#ls_flat_out";
+
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        var stagingColumns = entity.Fields.Select(f =>
+            $"{SqlIdentifier.Quote(f.ColumnName)} {SqlTypeMap.SqlTypeFor(f)} NULL");
+        await ExecuteAsync(connection, null,
+            $"CREATE TABLE {stageName} ({string.Join(", ", stagingColumns)}); " +
+            $"CREATE TABLE {outName} (_Action nvarchar(10) NOT NULL);",
+            cancellationToken);
+
+        long staged;
+        using (var reader = new DataRecordReader(acceptedRoots, entity, cancellationToken))
+        {
+            using var bulkCopy = new SqlBulkCopy(connection)
+            {
+                DestinationTableName = stageName,
+                EnableStreaming = true,
+                BulkCopyTimeout = 0,
+                BatchSize = 10_000,
+            };
+            for (var i = 0; i < entity.Fields.Count; i++)
+            {
+                bulkCopy.ColumnMappings.Add(i, entity.Fields[i].ColumnName);
+            }
+
+            await bulkCopy.WriteToServerAsync(reader, cancellationToken);
+            staged = reader.RowsRead;
+        }
+
+        long inserted = 0, updated = 0;
+        if (entity.NaturalKey.Count > 0)
+        {
+            try
+            {
+                await ExecuteAsync(connection, null, BuildFlatMergeSql(entity, stageName, outName), cancellationToken);
+            }
+            catch (SqlException ex) when (ex.Number == 8672)
+            {
+                throw new InvalidOperationException(
+                    $"The file contains multiple '{entity.Name}' records with the same natural key " +
+                    $"({string.Join(", ", entity.NaturalKey)}). Deduplicate the source data or adjust the natural key.",
+                    ex);
+            }
+
+            await using var command = new SqlCommand(
+                $"SELECT _Action, COUNT(*) FROM {outName} GROUP BY _Action;", connection);
+            await using var counts = await command.ExecuteReaderAsync(cancellationToken);
+            while (await counts.ReadAsync(cancellationToken))
+            {
+                if (counts.GetString(0) == "INSERT")
+                {
+                    inserted = counts.GetInt32(1);
+                }
+                else
+                {
+                    updated = counts.GetInt32(1);
+                }
+            }
+        }
+        else
+        {
+            var columns = string.Join(", ", entity.Fields.Select(f => SqlIdentifier.Quote(f.ColumnName)));
+            await using var command = new SqlCommand(
+                $"INSERT INTO {entity.QualifiedTable} ({columns}) SELECT {columns} FROM {stageName};",
+                connection);
+            command.CommandTimeout = 0;
+            inserted = await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        logger.LogDebug(
+            "Streamed {Staged} flat records for dataset {Dataset}: {Inserted} inserted, {Updated} updated",
+            staged, context.Manifest.Name, inserted, updated);
+        return new WriteResult(inserted, updated);
+    }
+
+    /// <summary>Merge for the flat path: no staging ids, no parent keys, counts only.</summary>
+    internal static string BuildFlatMergeSql(EntityDefinition entity, string stageName, string outName)
+    {
+        var naturalKey = new HashSet<string>(entity.NaturalKey, StringComparer.OrdinalIgnoreCase);
+        var dataColumns = entity.Fields.Select(f => f.ColumnName).ToArray();
+
+        var conditions = entity.NaturalKey.Select(k =>
+        {
+            var col = SqlIdentifier.Quote(k);
+            var keyField = entity.Fields.FirstOrDefault(f =>
+                string.Equals(f.ColumnName, k, StringComparison.OrdinalIgnoreCase));
+            return keyField?.Required == true
+                ? $"t.{col} = s.{col}"
+                : $"(t.{col} = s.{col} OR (t.{col} IS NULL AND s.{col} IS NULL))";
+        });
+
+        var setColumns = dataColumns.Where(c => !naturalKey.Contains(c)).ToArray();
+        if (setColumns.Length == 0)
+        {
+            setColumns = [entity.NaturalKey[0]];
+        }
+
+        var insertColumns = string.Join(", ", dataColumns.Select(SqlIdentifier.Quote));
+        var insertValues = string.Join(", ", dataColumns.Select(c => $"s.{SqlIdentifier.Quote(c)}"));
+
+        return $"""
+            MERGE {entity.QualifiedTable} WITH (HOLDLOCK) AS t
+            USING {stageName} AS s
+            ON {string.Join(" AND ", conditions)}
+            WHEN MATCHED THEN UPDATE SET {string.Join(", ", setColumns.Select(c => $"t.{SqlIdentifier.Quote(c)} = s.{SqlIdentifier.Quote(c)}"))}
+            WHEN NOT MATCHED THEN INSERT ({insertColumns})
+            VALUES ({insertValues})
+            OUTPUT $action INTO {outName} (_Action);
+            """;
     }
 
     private async Task<WriteResult> WriteBatchScopedAsync(
@@ -404,7 +535,7 @@ public sealed class SqlServerImportWriter(
 
     private static async Task ExecuteAsync(
         SqlConnection connection,
-        SqlTransaction transaction,
+        SqlTransaction? transaction,
         string sql,
         CancellationToken cancellationToken)
     {
