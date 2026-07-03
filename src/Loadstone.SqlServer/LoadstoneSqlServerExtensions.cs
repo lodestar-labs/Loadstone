@@ -28,4 +28,20 @@ public static class LoadstoneSqlServerExtensions
         builder.AddLookupProvider<CodeListLookupProvider>();
         return builder;
     }
+
+    /// <summary>
+    /// Registers a configuration-defined lookup provider backed by a SQL query — typically
+    /// an existing company lookup database. Manifests reference it through
+    /// <c>field.lookup.provider = options.Key</c>.
+    /// </summary>
+    public static LoadstoneBuilder AddSqlLookup(this LoadstoneBuilder builder, SqlLookupOptions options)
+    {
+        builder.Services.AddSingleton<Loadstone.Lookups.ILookupProvider>(provider =>
+            new SqlQueryLookupProvider(options, provider.GetRequiredService<SqlConnectionFactory>()));
+        return builder;
+    }
+
+    public static LoadstoneBuilder AddSqlLookup(
+        this LoadstoneBuilder builder, string key, string query, string? connectionString = null) =>
+        builder.AddSqlLookup(new SqlLookupOptions { Key = key, Query = query, ConnectionString = connectionString });
 }

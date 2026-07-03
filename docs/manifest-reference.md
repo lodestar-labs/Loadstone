@@ -106,6 +106,32 @@ Manage the built-in code lists over HTTP: `GET /api/codelists`,
 `GET /api/codelists/{list}`, and `PUT /api/codelists/{list}` with
 `[{ "code": "DK", "description": "Denmark" }, ...]`.
 
+### Using an existing lookup database
+
+An organization's own lookup tables plug in without code through configuration-defined
+SQL providers. Each entry under `Loadstone:SqlLookups` becomes a provider that manifests
+can reference by `key`:
+
+```json
+"Loadstone": {
+  "SqlLookups": [
+    {
+      "key": "res-codes",
+      "connectionString": "Server=res-db;Database=RES;Integrated Security=True;TrustServerCertificate=True",
+      "query": "SELECT c.tblCodeID FROM dbo.tblCode c JOIN dbo.tblCodeType t ON t.tblCodeTypeID = c.tblCodeTypeID WHERE t.CodeType = @List AND c.Code = @Value"
+    }
+  ]
+}
+```
+
+The query receives `@List` (the manifest's `lookup.list`) and `@Value` (the raw source
+string) and returns one scalar on a hit, no rows on a miss. `connectionString` is
+optional and defaults to Loadstone's own database. In code, the same registration is
+`.AddSqlLookup("res-codes", query, connectionString)`. For non-SQL sources (REST APIs,
+static data), implement `ILookupProvider` and register it with
+`.AddLookupProvider<T>()`; implement `CreateAsync` only if the provider should support
+the `autoCreate` policy.
+
 ## Formats and shapes
 
 **XML** — the reader streams the document and materializes one root-entity element at a

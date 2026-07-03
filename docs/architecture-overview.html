@@ -359,10 +359,12 @@ keys in the next level. One transaction per batch; natural keys make re-imports 
   </tr>
   <tr>
     <td><span class="pill">Reference</span>Pluggable lookups</td>
-    <td>Built-in code-list tables (string code → id) with an HTTP admin API, plus any
-        custom <code>ILookupProvider</code> (REST API, another database, static data).
-        Per-field policies for unknown values: <em>rejectRecord</em>, <em>rejectFile</em>,
-        <em>useDefault</em>, <em>autoCreate</em> — with caching and case-sensitivity control.</td>
+    <td>Built-in code-list tables (string code → id) with an HTTP admin API;
+        configuration-defined SQL lookups against any existing database
+        (<code>Loadstone:SqlLookups</code> — no code required, see §6); and fully custom
+        <code>ILookupProvider</code>s (REST API, static data, anything). Per-field policies
+        for unknown values: <em>rejectRecord</em>, <em>rejectFile</em>, <em>useDefault</em>,
+        <em>autoCreate</em> — with caching and case-sensitivity control.</td>
   </tr>
   <tr>
     <td><span class="pill">Safety</span>Row-level fault isolation</td>
@@ -407,7 +409,163 @@ keys in the next level. One transaction per batch; natural keys make re-imports 
   </tr>
 </table>
 
-<h2>6. Why this could be popular on GitHub</h2>
+<h2>6. Bring your own lookup database — the "company X" case</h2>
+<p>
+Reference-data resolution is where importers usually stop being generic: real
+organizations already <em>have</em> a lookup database, and it doesn't look like anyone
+else's. Loadstone treats that as the normal case, with three tiers of integration —
+from zero code to full control.
+</p>
+
+<p>
+<strong>The scenario</strong> (taken from the project Loadstone generalizes): a fisheries
+research agency imports scientific sampling data. Its reference database — call it
+<code>RES</code> — holds a generic pair of tables, <code>tblCodeType</code> (about ninety
+named lists: <code>SpecWoRMS</code> species codes, <code>ISO_3166</code> countries, gear
+types, harbours…) and <code>tblCode</code> (the codes themselves). Incoming files carry
+strings like <code>"126417"</code> or <code>"DK"</code>; the target tables store the
+matching <code>tblCodeID</code> integer. In the legacy importer this mapping was a
+hard-coded C# enum that had to be kept in sync with the database by hand, and an unknown
+code crashed the entire file.
+</p>
+
+<h3>Tier 1 — configuration only: point Loadstone at the existing tables</h3>
+<p>
+Company X's lookup database becomes a provider by adding a query to
+<code>appsettings.json</code> (or an environment variable / Key Vault entry). No build,
+no deployment of new code:
+</p>
+<pre><code>"Loadstone": {
+  "SqlLookups": [
+    {
+      "key": "res-codes",
+      "connectionString": "Server=res-db;Database=RES;Integrated Security=True;TrustServerCertificate=True",
+      "query": "SELECT c.tblCodeID
+                FROM dbo.tblCode c
+                JOIN dbo.tblCodeType t ON t.tblCodeTypeID = c.tblCodeTypeID
+                WHERE t.CodeType = @List AND c.Code = @Value AND c.Deprecated = 0"
+    }
+  ]
+}</code></pre>
+<p>
+The contract is small: the query receives <code>@List</code> (the manifest's list name)
+and <code>@Value</code> (the raw source string) and returns one scalar on a hit, no rows
+on a miss. It can live in a different database, a different server, even a different
+vendor's driver later — the pipeline neither knows nor cares.
+</p>
+
+<p>Manifest fields then select the provider and list by name, and choose a policy per field:</p>
+<pre><code>{ "name": "SAspeciesCode",
+  "lookup": { "provider": "res-codes", "list": "SpecWoRMS", "onMissing": "rejectRecord" } },
+
+{ "name": "VDcountry",
+  "lookup": { "provider": "res-codes", "list": "ISO_3166", "onMissing": "rejectFile" } }</code></pre>
+<p>
+That last line reproduces the legacy system's strictness <em>where it's wanted</em>
+(a bad country code means the file itself is suspect) while the species field above only
+quarantines the affected sample — with the source line, the raw code, and the reason
+recorded for the data manager. The ninety-entry enum is gone; the lists are whatever
+<code>tblCodeType</code> says they are, today.
+</p>
+
+<h3>Tier 2 — one small class: lookups that aren't a SQL query</h3>
+<p>
+If company X later moves species validation behind a web service, the provider becomes an
+ordinary class instead of a query — same manifest, same policies, one changed
+registration:
+</p>
+<pre><code>public sealed class WormsApiLookup(HttpClient http) : ILookupProvider
+{
+    public string Key =&gt; "worms-api";
+
+    public async ValueTask&lt;LookupResult&gt; ResolveAsync(
+        string list, string value, bool caseInsensitive, CancellationToken ct = default)
+    {
+        var response = await http.GetAsync($"/rest/AphiaRecordByID/{value}", ct);
+        return response.IsSuccessStatusCode
+            ? LookupResult.Hit(int.Parse(value))
+            : LookupResult.Miss;
+    }
+}
+
+// Program.cs
+builder.Services.AddLoadstone()
+    .UseSqlServer()
+    .AddLookupProvider&lt;WormsApiLookup&gt;();</code></pre>
+<p>
+Providers can optionally implement <code>CreateAsync</code> to support the
+<em>autoCreate</em> policy (the built-in code-list provider does); providers that don't
+simply reject it. Caching, per-field policy handling, and miss bookkeeping stay in the
+resolver — a provider only ever answers "what does this value mean?".
+</p>
+
+<h3>How a lookup field resolves</h3>
+<figure class="figure">
+<svg viewBox="0 0 900 250" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrG4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#047857"/>
+    </marker>
+    <marker id="arrW4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect x="16" y="86" width="150" height="62" class="box"/>
+  <text x="91" y="110" text-anchor="middle" class="lbl">Field value</text>
+  <text x="91" y="128" text-anchor="middle" class="lbl-sub">"SpecWoRMS" : "126417"</text>
+
+  <path d="M166 117 L212 117" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr4)"/>
+
+  <rect x="212" y="72" width="190" height="90" class="box box-accent"/>
+  <text x="307" y="96" text-anchor="middle" class="lbl">Lookup resolver</text>
+  <text x="307" y="114" text-anchor="middle" class="lbl-sub">in-memory cache</text>
+  <text x="307" y="130" text-anchor="middle" class="lbl-sub">routes by provider key</text>
+  <text x="307" y="146" text-anchor="middle" class="lbl-sub">applies onMissing policy</text>
+
+  <path d="M402 92 L468 52" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr4)"/>
+  <path d="M402 117 L468 117" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr4)"/>
+  <path d="M402 142 L468 182" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr4)"/>
+
+  <rect x="468" y="24" width="212" height="52" class="box"/>
+  <text x="574" y="45" text-anchor="middle" class="lbl-sub">"codelist" — built-in tables</text>
+  <text x="574" y="62" text-anchor="middle" class="lbl-sub">loadstone.CodeLists / Codes</text>
+
+  <rect x="468" y="92" width="212" height="52" class="box box-good"/>
+  <text x="574" y="112" text-anchor="middle" class="lbl-sub">"res-codes" — company X's DB</text>
+  <text x="574" y="130" text-anchor="middle" class="lbl-sub">config-defined SQL query</text>
+
+  <rect x="468" y="160" width="212" height="52" class="box"/>
+  <text x="574" y="181" text-anchor="middle" class="lbl-sub">"worms-api" — custom class</text>
+  <text x="574" y="198" text-anchor="middle" class="lbl-sub">any ILookupProvider</text>
+
+  <path d="M680 118 L736 100" stroke="#047857" stroke-width="1.8" fill="none" marker-end="url(#arrG4)"/>
+  <rect x="736" y="66" width="150" height="48" class="box box-good"/>
+  <text x="811" y="86" text-anchor="middle" class="lbl-sub">hit → resolved id</text>
+  <text x="811" y="103" text-anchor="middle" class="lbl-sub">written to the column</text>
+
+  <path d="M680 132 L736 156" stroke="#b45309" stroke-width="1.8" fill="none" marker-end="url(#arrW4)"/>
+  <rect x="736" y="140" width="150" height="64" class="box box-warn"/>
+  <text x="811" y="158" text-anchor="middle" class="lbl-sub">miss → policy decides:</text>
+  <text x="811" y="174" text-anchor="middle" class="lbl-sub">reject record / file</text>
+  <text x="811" y="190" text-anchor="middle" class="lbl-sub">default / auto-create</text>
+
+  <text x="450" y="238" text-anchor="middle" class="lbl-sub">Three providers, three sources, one manifest vocabulary — a dataset can mix all of them field by field.</text>
+</svg>
+<figcaption>Figure 4 — Lookup resolution. The resolver owns caching and policies; providers only answer "what does this value mean?".</figcaption>
+</figure>
+
+<div class="callout">
+<strong>Why this matters:</strong> in the legacy importer this whole area was a hard-coded
+enum, a case-sensitive dictionary, and a crash on the first unknown code. In Loadstone it
+is a per-field, per-dataset decision expressed in data — and pointing a new company's
+lookup database at the system is an <code>appsettings</code> entry, not a fork.
+</div>
+
+<h2>7. Why this could be popular on GitHub</h2>
 
 <div class="callout honest">
 <strong>Honesty first:</strong> nothing guarantees stars — six-figure counts put a project

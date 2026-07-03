@@ -28,11 +28,18 @@ try
     builder.Services.PostConfigure<LoadstoneOptions>(options =>
         options.ConnectionString ??= builder.Configuration.GetConnectionString("Loadstone"));
 
-    builder.Services.AddLoadstone()
+    var loadstone = builder.Services.AddLoadstone()
         .UseSqlServer()
         .AddSourceReader<XmlSourceReader>()
         .AddSourceReader<JsonSourceReader>()
         .AddSourceReader<CsvSourceReader>();
+
+    // Configuration-defined lookup providers (Loadstone:SqlLookups): point imports at an
+    // existing lookup database without writing code.
+    foreach (var lookup in builder.Configuration.GetSection("Loadstone:SqlLookups").Get<SqlLookupOptions[]>() ?? [])
+    {
+        loadstone.AddSqlLookup(lookup);
+    }
 
     var otel = builder.Services.AddOpenTelemetry()
         .ConfigureResource(resource => resource.AddService("loadstone"))
