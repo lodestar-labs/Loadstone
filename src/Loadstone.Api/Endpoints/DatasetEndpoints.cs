@@ -48,8 +48,18 @@ public static class DatasetEndpoints
                 return Results.BadRequest(new { error = $"Manifest name '{manifest.Name}' does not match the route ('{name}')." });
             }
 
+            // Persist first: if the manifest store is unwritable, the registry must not
+            // diverge from disk.
+            try
+            {
+                await store.SaveAsync(manifest, cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem($"The manifest could not be persisted: {ex.Message}", statusCode: 500);
+            }
+
             registry.Register(manifest);
-            await store.SaveAsync(manifest, cancellationToken);
             if (options.Value.AutoCreateTargetTables)
             {
                 await schemaManager.ApplyTargetSchemaAsync(manifest, cancellationToken);

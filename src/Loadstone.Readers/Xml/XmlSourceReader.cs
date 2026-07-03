@@ -35,6 +35,9 @@ public sealed class XmlSourceReader : ISourceReader
 
         using var reader = XmlReader.Create(stream, settings);
         var root = manifest.Root;
+        var wrapper = manifest.Source.Xml.RootElement;
+        var insideWrapper = wrapper is null;
+        var wrapperDepth = -1;
         bool readNext = true;
         while (true)
         {
@@ -45,7 +48,29 @@ public sealed class XmlSourceReader : ISourceReader
             }
 
             readNext = true;
-            if (reader.NodeType == XmlNodeType.Element
+            if (wrapper is not null)
+            {
+                if (!insideWrapper
+                    && reader.NodeType == XmlNodeType.Element
+                    && string.Equals(reader.LocalName, wrapper, StringComparison.OrdinalIgnoreCase))
+                {
+                    insideWrapper = true;
+                    wrapperDepth = reader.Depth;
+                    continue;
+                }
+
+                if (insideWrapper
+                    && reader.NodeType == XmlNodeType.EndElement
+                    && reader.Depth == wrapperDepth
+                    && string.Equals(reader.LocalName, wrapper, StringComparison.OrdinalIgnoreCase))
+                {
+                    insideWrapper = false;
+                    continue;
+                }
+            }
+
+            if (insideWrapper
+                && reader.NodeType == XmlNodeType.Element
                 && string.Equals(reader.LocalName, root.Name, StringComparison.OrdinalIgnoreCase))
             {
                 var record = await ReadEntityAsync(reader, root, parentPath: null, cancellationToken);
@@ -104,7 +129,16 @@ public sealed class XmlSourceReader : ISourceReader
                 }
                 else if (entity.FindField(name) is { Source: FieldSource.Element } field)
                 {
-                    record.Raw[field.Name] = await reader.ReadElementContentAsStringAsync();
+                    try
+                    {
+                        record.Raw[field.Name] = await reader.ReadElementContentAsStringAsync();
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or XmlException)
+                    {
+                        throw new SourceFormatException(
+                            $"Element '{name}' at {record.Location} maps to field '{field.Name}' but does not contain simple text content.",
+                            ex);
+                    }
                 }
                 else
                 {

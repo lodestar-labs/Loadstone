@@ -33,4 +33,11 @@ public sealed class LoadstoneOptions
 
     /// <summary>Create missing target tables from the manifest when a dataset is registered.</summary>
     public bool AutoCreateTargetTables { get; set; }
+
+    /// <summary>
+    /// Maximum accepted upload size in bytes (default 4 GB). A finite ceiling protects the
+    /// host's disk from runaway or malicious uploads while comfortably exceeding typical
+    /// import files.
+    /// </summary>
+    public long MaxUploadBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 }

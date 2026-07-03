@@ -19,11 +19,15 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Import files are routinely far larger than Kestrel's ~28 MB default request cap;
-    // uploads are buffered to disk by the form pipeline, not held in memory.
-    builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = null);
+    // Import files are routinely far larger than Kestrel's ~28 MB default request cap,
+    // but the ceiling must stay finite: an unauthenticated upload endpoint with no limit
+    // is a disk-exhaustion hazard. Uploads are buffered to disk, not memory.
+    var maxUploadBytes = builder.Configuration
+        .GetSection(LoadstoneOptions.SectionName)
+        .Get<LoadstoneOptions>()?.MaxUploadBytes ?? new LoadstoneOptions().MaxUploadBytes;
+    builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = maxUploadBytes);
     builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
-        options.MultipartBodyLengthLimit = long.MaxValue);
+        options.MultipartBodyLengthLimit = maxUploadBytes);
 
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)

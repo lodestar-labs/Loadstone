@@ -46,7 +46,9 @@ public sealed class LocalFileStore(IOptions<LoadstoneOptions> options) : IFileSt
     private string Resolve(string fileReference)
     {
         var path = Path.GetFullPath(Path.Combine(_root, fileReference));
-        var root = Path.GetFullPath(_root);
+        // Boundary includes the separator so sibling directories with the store's name
+        // as a prefix (e.g. "imports-other") never pass the check.
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_root)) + Path.DirectorySeparatorChar;
         if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("File reference must not escape the file store.", nameof(fileReference));

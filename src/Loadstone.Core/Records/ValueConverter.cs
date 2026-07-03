@@ -51,7 +51,8 @@ public static class ValueConverter
             FieldKind.String => static s => s,
             FieldKind.Int32 => s => int.Parse(s, NumberStyles.Integer, invariant),
             FieldKind.Int64 => s => long.Parse(s, NumberStyles.Integer, invariant),
-            FieldKind.Decimal => s => decimal.Parse(s, NumberStyles.Number, invariant),
+            // Float (not Number): JSON sources legitimately emit exponent notation.
+            FieldKind.Decimal => s => decimal.Parse(s, NumberStyles.Float, invariant),
             FieldKind.Double => s => double.Parse(s, NumberStyles.Float, invariant),
             FieldKind.Boolean => ParseBoolean,
             FieldKind.Guid => static s => Guid.Parse(s),

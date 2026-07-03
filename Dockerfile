@@ -6,6 +6,8 @@ RUN dotnet publish src/Loadstone.Api/Loadstone.Api.csproj -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app .
+RUN mkdir -p /app/data/datasets /app/data/imports && chown -R app:app /app/data
+USER app
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Loadstone.Api.dll"]

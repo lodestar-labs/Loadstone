@@ -7,11 +7,13 @@ using Loadstone.Sources;
 namespace Loadstone.Readers.Json;
 
 /// <summary>
-/// JSON reader. A top-level array is streamed element by element, so arbitrarily large
-/// files import with bounded memory. A top-level object is also accepted when it wraps the
-/// record array in a property (source.json.rootProperty, or a property named after the
-/// root entity). Nested arrays/objects matching child entity names become children;
-/// properties matching fields become raw values; everything else is ignored.
+/// JSON reader. A top-level array on a seekable stream is streamed element by element, so
+/// arbitrarily large array files import with bounded memory. A top-level object is also
+/// accepted when it wraps the record array in a property (source.json.rootProperty, or a
+/// property named after the root entity) — but that path parses the whole document, so
+/// very large exports should prefer a top-level array. Nested arrays/objects matching
+/// child entity names become children; properties matching fields become raw values;
+/// everything else is ignored.
 /// </summary>
 public sealed class JsonSourceReader : ISourceReader
 {
@@ -38,16 +40,9 @@ public sealed class JsonSourceReader : ISourceReader
 
         if (firstByte == (byte)'[')
         {
-            IAsyncEnumerable<JsonElement?> elements;
-            try
-            {
-                elements = JsonSerializer.DeserializeAsyncEnumerable<JsonElement?>(
-                    stream, cancellationToken: cancellationToken);
-            }
-            catch (JsonException ex)
-            {
-                throw new SourceFormatException($"Malformed JSON: {ex.Message}", ex);
-            }
+            // Deferred enumerable: malformed JSON surfaces during iteration, which Guard converts.
+            var elements = JsonSerializer.DeserializeAsyncEnumerable<JsonElement?>(
+                stream, cancellationToken: cancellationToken);
 
             await foreach (var element in Guard(elements, cancellationToken))
             {

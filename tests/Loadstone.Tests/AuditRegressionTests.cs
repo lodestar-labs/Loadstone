@@ -100,4 +100,107 @@ public class AuditRegressionTests
 
         Assert.That(entity.QualifiedTable, Is.EqualTo("[dbo].[Ord]]ers]"));
     }
+
+    [Test]
+    public void Decimal_fields_accept_exponent_notation_from_json()
+    {
+        var field = new FieldDefinition { Name = "f", Type = FieldKind.Decimal };
+
+        Assert.That(Loadstone.Records.ValueConverter.TryConvert(field, "1.5e3", out var value, out _), Is.True);
+        Assert.That(value, Is.EqualTo(1500m));
+    }
+
+    [Test]
+    public void Out_of_range_precision_scale_and_maxlength_fail_validation()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Fields.Add(new FieldDefinition { Name = "Bad1", Type = FieldKind.Decimal, Precision = 5, Scale = 10 });
+        manifest.Root.Fields.Add(new FieldDefinition { Name = "Bad2", Type = FieldKind.Decimal, Precision = 40 });
+        manifest.Root.Fields.Add(new FieldDefinition { Name = "Bad3", MaxLength = 5000 });
+
+        var errors = manifest.Validate();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(errors, Has.Some.Contains("scale"));
+            Assert.That(errors, Has.Some.Contains("precision"));
+            Assert.That(errors, Has.Some.Contains("maxLength"));
+        });
+    }
+
+    [Test]
+    public void Oversized_natural_key_string_fails_validation()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Fields[0].MaxLength = 1000;
+
+        Assert.That(manifest.Validate(), Has.Some.Contains("850"));
+    }
+
+    [Test]
+    public async Task Xml_root_element_setting_scopes_matching_to_the_wrapper()
+    {
+        var manifest = TestData.Orders();
+        manifest.Source.Xml.RootElement = "Body";
+        const string xml = """
+            <Envelope>
+              <Preview><Order><OrderNumber>OUTSIDE</OrderNumber></Order></Preview>
+              <Body><Order><OrderNumber>INSIDE</OrderNumber></Order></Body>
+            </Envelope>
+            """;
+
+        var reader = new Loadstone.Readers.Xml.XmlSourceReader();
+        var records = new List<Loadstone.Records.DataRecord>();
+        await foreach (var record in reader.ReadAsync(TestData.AsStream(xml), manifest))
+        {
+            records.Add(record);
+        }
+
+        Assert.That(records.Single().Raw["OrderNumber"], Is.EqualTo("INSIDE"));
+    }
+
+    [Test]
+    public void Xml_field_with_nested_markup_reports_a_source_format_error()
+    {
+        const string xml = """
+            <Orders><Order><OrderNumber><b>A-1</b></OrderNumber></Order></Orders>
+            """;
+
+        var reader = new Loadstone.Readers.Xml.XmlSourceReader();
+        Assert.ThrowsAsync<SourceFormatException>(async () =>
+        {
+            await foreach (var _ in reader.ReadAsync(TestData.AsStream(xml), TestData.Orders()))
+            {
+            }
+        });
+    }
+
+    [Test]
+    public async Task Duplicate_csv_keys_reject_the_affected_parent()
+    {
+        using var zipStream = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(zipStream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddEntry(archive, "Order.csv", "_key,OrderNumber\nk1,A-1\nk1,A-2\n");
+            AddEntry(archive, "Line.csv", "_key,_parentKey,LineNumber\nl1,k1,1\n");
+        }
+
+        zipStream.Position = 0;
+        var reader = new Loadstone.Readers.Csv.CsvSourceReader();
+        var records = new List<Loadstone.Records.DataRecord>();
+        await foreach (var record in reader.ReadAsync(zipStream, TestData.Orders()))
+        {
+            records.Add(record);
+        }
+
+        Assert.That(records.Count(r => r.TreeHasErrors), Is.EqualTo(1), "the duplicate-key parent must carry an error");
+        Assert.That(records.Count(r => !r.TreeHasErrors), Is.EqualTo(1));
+    }
+
+    private static void AddEntry(System.IO.Compression.ZipArchive archive, string name, string content)
+    {
+        var entry = archive.CreateEntry(name);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
+    }
 }

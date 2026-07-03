@@ -142,13 +142,37 @@ public sealed class DatasetManifest
             {
                 errors.Add($"{scope}.{field.Name}: lookup policy 'UseDefault' requires a 'default' value.");
             }
+
+            if (field.Lookup is null && field.Type == FieldKind.Decimal)
+            {
+                if (field.Precision is < 1 or > 38)
+                {
+                    errors.Add($"{scope}.{field.Name}: decimal precision must be between 1 and 38.");
+                }
+                else if (field.Scale < 0 || field.Scale > field.Precision)
+                {
+                    errors.Add($"{scope}.{field.Name}: decimal scale must be between 0 and the precision ({field.Precision}).");
+                }
+            }
+
+            if (field.MaxLength is { } maxLength && (maxLength < 1 || maxLength > 4000))
+            {
+                errors.Add($"{scope}.{field.Name}: maxLength must be between 1 and 4000 (omit it for unbounded text).");
+            }
         }
 
         foreach (var key in entity.NaturalKey)
         {
-            if (!entity.Fields.Any(f => string.Equals(f.ColumnName, key, StringComparison.OrdinalIgnoreCase)))
+            var keyField = entity.Fields.FirstOrDefault(f => string.Equals(f.ColumnName, key, StringComparison.OrdinalIgnoreCase));
+            if (keyField is null)
             {
                 errors.Add($"{scope}: natural key column '{key}' does not match any field column.");
+                continue;
+            }
+
+            if (keyField.Lookup is null && keyField.Type == FieldKind.String && keyField.MaxLength is > 850)
+            {
+                errors.Add($"{scope}: natural key column '{key}' allows more than 850 characters, which exceeds SQL Server's index key size.");
             }
         }
     }

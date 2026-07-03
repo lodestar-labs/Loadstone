@@ -1,11 +1,14 @@
+# Local evaluation stack. Override the dev database password with:
+#   LOADSTONE_DB_PASSWORD=... docker compose up
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Loadstone!Dev1"
+      MSSQL_SA_PASSWORD: "${LOADSTONE_DB_PASSWORD:-Loadstone!Dev1}"
     ports:
-      - "14333:1433"
+      # Bound to localhost only — the app reaches the db over the compose network.
+      - "127.0.0.1:14333:1433"
     volumes:
       - mssql-data:/var/opt/mssql
 
@@ -14,14 +17,14 @@ services:
     depends_on:
       - db
     environment:
-      Loadstone__ConnectionString: "Server=db;Database=Loadstone;User Id=sa;Password=Loadstone!Dev1;TrustServerCertificate=True"
+      Loadstone__ConnectionString: "Server=db;Database=Loadstone;User Id=sa;Password=${LOADSTONE_DB_PASSWORD:-Loadstone!Dev1};TrustServerCertificate=True"
       Loadstone__AutoCreateTargetTables: "true"
       Loadstone__ManifestDirectory: "/app/data/datasets"
       Loadstone__FileStorePath: "/app/data/imports"
     ports:
       - "8080:8080"
     volumes:
-      - ./samples/orders/orders.dataset.json:/app/data/datasets/orders.json:ro
+      - ./samples/orders/orders.dataset.json:/app/data/datasets/orders.json
       - loadstone-data:/app/data/imports
 
 volumes:
