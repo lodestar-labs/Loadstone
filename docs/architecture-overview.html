@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loadstone — Architecture &amp; Capabilities</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --muted: #52606d;
+    --line: #d9e2ec;
+    --accent: #1d4ed8;
+    --accent-soft: #eff6ff;
+    --good: #047857;
+    --warn: #b45309;
+    --bg: #ffffff;
+    --panel: #f8fafc;
+    --code: #f1f5f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 28px 80px; }
+  header {
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #f8fafc, #ffffff);
+    padding: 48px 0 36px;
+    margin-bottom: 40px;
+  }
+  header .wrap { padding-bottom: 0; }
+  h1 { font-size: 2.1rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0 0 18px; }
+  .meta { font-size: 0.85rem; color: var(--muted); }
+  .meta code { background: var(--code); padding: 2px 6px; border-radius: 4px; }
+  h2 { font-size: 1.45rem; margin: 48px 0 12px; letter-spacing: -0.01em; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  code { font-family: Consolas, "Cascadia Code", monospace; font-size: 0.92em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px 18px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.93rem; }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  .figure { margin: 24px 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  .figure figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 10px; text-align: center; }
+  .figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .callout.honest { border-left-color: var(--warn); background: #fffbeb; }
+  ol.reasons > li { margin: 12px 0; }
+  ol.reasons > li strong { color: var(--ink); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .pill { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-right: 6px; }
+  footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
+  /* SVG shared classes */
+  .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; rx: 8; }
+  .box-accent { fill: #eff6ff; stroke: #1d4ed8; stroke-width: 1.4; }
+  .box-good { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+  .box-warn { fill: #fffbeb; stroke: #b45309; stroke-width: 1.4; }
+  .box-dark { fill: #0f172a; stroke: #0f172a; }
+  .lbl { font: 600 13px "Segoe UI", system-ui, sans-serif; fill: #1f2933; }
+  .lbl-sub { font: 400 11px "Segoe UI", system-ui, sans-serif; fill: #52606d; }
+  .lbl-white { font: 600 13px "Segoe UI", system-ui, sans-serif; fill: #f8fafc; }
+  .arrow { stroke: #64748b; stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+  .arrow-good { stroke: #047857; }
+  .arrow-warn { stroke: #b45309; }
+  .lane { font: 700 11px "Segoe UI", system-ui, sans-serif; fill: #94a3b8; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Loadstone</h1>
+    <p class="tagline">Import data of any shape — XML, JSON, CSV — into a relational database, declaratively.</p>
+    <p class="meta">
+      Architecture &amp; capabilities overview ·
+      <code>github.com/KadjiProjects/Loadstone</code> · .NET 10 · MIT
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<h2>1. The core idea</h2>
+<p>
+Every integration team eventually hand-writes the same program: parse a file, walk its
+hierarchy, resolve reference codes, insert parent rows, wire up foreign keys, insert
+children, and cope with the bad rows. Loadstone replaces that entire class of one-off
+importers with <strong>a single declarative JSON manifest per dataset</strong>. The
+manifest is the only thing you author. Everything else is derived from it:
+</p>
+<table>
+  <tr><th>You declare (once)</th><th>Loadstone derives</th></tr>
+  <tr>
+    <td>Entity hierarchy, field names and types, natural keys, lookup rules, queue settings</td>
+    <td>Format parsing expectations · validation · type conversion · staging DDL ·
+        merge/upsert SQL · foreign-key wiring · target-table <code>CREATE</code> scripts ·
+        a dedicated durable queue · rejection reporting</td>
+  </tr>
+</table>
+
+<h2>2. System architecture</h2>
+<p>
+Five projects, layered so that every external concern — file format, database engine,
+queue transport, file storage, reference-data source — sits behind a small interface
+defined in a dependency-free core.
+</p>
+
+<figure class="figure">
+<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Clients -->
+  <rect x="330" y="14" width="240" height="46" class="box"/>
+  <text x="450" y="33" text-anchor="middle" class="lbl">Clients / other systems</text>
+  <text x="450" y="49" text-anchor="middle" class="lbl-sub">upload files, register datasets, watch jobs</text>
+
+  <path class="arrow" d="M450 60 L450 92"/>
+
+  <!-- API layer -->
+  <text x="24" y="120" class="lane">HTTP</text>
+  <rect x="90" y="96" width="720" height="62" class="box box-accent"/>
+  <text x="450" y="118" text-anchor="middle" class="lbl">Loadstone.Api — REST + Swagger</text>
+  <text x="450" y="136" text-anchor="middle" class="lbl-sub">datasets · imports · code lists · schema · health — Serilog + OpenTelemetry wired in</text>
+
+  <path class="arrow" d="M450 158 L450 190"/>
+  <text x="466" y="180" class="lbl-sub">enqueue job (durable, named queue per dataset)</text>
+
+  <!-- Runtime layer -->
+  <text x="24" y="222" class="lane">RUNTIME</text>
+  <rect x="90" y="198" width="720" height="96" class="box"/>
+  <text x="450" y="220" text-anchor="middle" class="lbl">Loadstone.Runtime — queue workers + ImportEngine</text>
+  <rect x="112" y="234" width="200" height="44" class="box"/>
+  <text x="212" y="252" text-anchor="middle" class="lbl-sub">Queue workers</text>
+  <text x="212" y="267" text-anchor="middle" class="lbl-sub">claim · retry · dead-letter</text>
+  <rect x="336" y="234" width="228" height="44" class="box"/>
+  <text x="450" y="252" text-anchor="middle" class="lbl-sub">Pipeline steps (ordered)</text>
+  <text x="450" y="267" text-anchor="middle" class="lbl-sub">Validate → Lookups → yours</text>
+  <rect x="588" y="234" width="200" height="44" class="box"/>
+  <text x="688" y="252" text-anchor="middle" class="lbl-sub">Lookup resolver</text>
+  <text x="688" y="267" text-anchor="middle" class="lbl-sub">policies + caching</text>
+
+  <!-- Readers -->
+  <text x="24" y="352" class="lane">INPUT</text>
+  <rect x="90" y="330" width="330" height="88" class="box"/>
+  <text x="255" y="352" text-anchor="middle" class="lbl">Loadstone.Readers (streaming)</text>
+  <rect x="106" y="364" width="90" height="38" class="box"/>
+  <text x="151" y="387" text-anchor="middle" class="lbl-sub">XML</text>
+  <rect x="210" y="364" width="90" height="38" class="box"/>
+  <text x="255" y="387" text-anchor="middle" class="lbl-sub">JSON</text>
+  <rect x="314" y="364" width="90" height="38" class="box"/>
+  <text x="359" y="387" text-anchor="middle" class="lbl-sub">CSV / zip</text>
+
+  <path class="arrow" d="M255 330 L255 294"/>
+  <text x="130" y="316" class="lbl-sub">one canonical record tree</text>
+
+  <!-- SqlServer provider -->
+  <text x="24" y="472" class="lane">STORAGE</text>
+  <rect x="460" y="330" width="350" height="88" class="box"/>
+  <text x="635" y="352" text-anchor="middle" class="lbl">Loadstone.SqlServer</text>
+  <text x="635" y="372" text-anchor="middle" class="lbl-sub">durable job queue · job store &amp; audit trail</text>
+  <text x="635" y="388" text-anchor="middle" class="lbl-sub">code lists · schema generation</text>
+  <text x="635" y="404" text-anchor="middle" class="lbl-sub">bulk staging + generated MERGE writer</text>
+
+  <path class="arrow" d="M635 294 L635 330"/>
+
+  <!-- Core -->
+  <rect x="90" y="450" width="720" height="52" class="box box-dark"/>
+  <text x="450" y="472" text-anchor="middle" class="lbl-white">Loadstone.Core — dependency-free contracts</text>
+  <text x="450" y="490" text-anchor="middle" class="lbl-sub" fill="#94a3b8">ISourceReader · IImportStep · ILookupProvider · IImportWriter · IImportJobQueue · IFileStore · manifest + record model</text>
+
+  <path class="arrow" d="M255 418 L255 450"/>
+  <path class="arrow" d="M635 418 L635 450"/>
+
+  <!-- Database -->
+  <path class="arrow" d="M810 374 L860 374"/>
+  <ellipse cx="875" cy="360" rx="14" ry="6" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.2"/>
+  <rect x="861" y="360" width="28" height="26" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.2"/>
+  <ellipse cx="875" cy="386" rx="14" ry="6" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.2"/>
+  <text x="875" y="412" text-anchor="middle" class="lbl-sub">SQL Server /</text>
+  <text x="875" y="426" text-anchor="middle" class="lbl-sub">Azure SQL</text>
+
+  <text x="450" y="540" text-anchor="middle" class="lbl-sub">Everything implements Core's interfaces — PostgreSQL, Blob Storage, or Service Bus are new implementations, not rewrites.</text>
+</svg>
+<figcaption>Figure 1 — Layered architecture. The API host and background workers run in one process, which is exactly the shape Azure App Service (or any container host) wants.</figcaption>
+</figure>
+
+<h2>3. The import pipeline</h2>
+<p>
+Each job is one streaming pass. Records flow from the reader through the ordered step
+chain; a record tree that picks up an error anywhere is diverted to the rejection store,
+and everything else streams to the writer. Memory is bounded by a single record subtree,
+never the file, so multi-gigabyte inputs are fine.
+</p>
+
+<figure class="figure">
+<svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#047857"/>
+    </marker>
+    <marker id="arrW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect x="20" y="80" width="120" height="60" class="box"/>
+  <text x="80" y="105" text-anchor="middle" class="lbl">File</text>
+  <text x="80" y="123" text-anchor="middle" class="lbl-sub">xml · json · csv/zip</text>
+
+  <path d="M140 110 L180 110" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="180" y="80" width="130" height="60" class="box box-accent"/>
+  <text x="245" y="105" text-anchor="middle" class="lbl">Reader</text>
+  <text x="245" y="123" text-anchor="middle" class="lbl-sub">streams record trees</text>
+
+  <path d="M310 110 L350 110" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="350" y="66" width="112" height="88" class="box"/>
+  <text x="406" y="92" text-anchor="middle" class="lbl">Validate</text>
+  <text x="406" y="110" text-anchor="middle" class="lbl-sub">types · required</text>
+  <text x="406" y="125" text-anchor="middle" class="lbl-sub">lengths · defaults</text>
+
+  <path d="M462 110 L496 110" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="496" y="66" width="112" height="88" class="box"/>
+  <text x="552" y="92" text-anchor="middle" class="lbl">Lookups</text>
+  <text x="552" y="110" text-anchor="middle" class="lbl-sub">code → id</text>
+  <text x="552" y="125" text-anchor="middle" class="lbl-sub">policy on miss</text>
+
+  <path d="M608 110 L642 110" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="642" y="66" width="112" height="88" class="box"/>
+  <text x="698" y="92" text-anchor="middle" class="lbl">Your steps</text>
+  <text x="698" y="110" text-anchor="middle" class="lbl-sub">enrich · transform</text>
+  <text x="698" y="125" text-anchor="middle" class="lbl-sub">custom rules</text>
+
+  <path d="M754 96 L800 60" stroke="#047857" stroke-width="1.8" fill="none" marker-end="url(#arrG)"/>
+  <text x="762" y="60" class="lbl-sub" fill="#047857">clean trees</text>
+  <rect x="800" y="26" width="88" height="56" class="box box-good"/>
+  <text x="844" y="49" text-anchor="middle" class="lbl">Writer</text>
+  <text x="844" y="66" text-anchor="middle" class="lbl-sub">bulk merge</text>
+
+  <path d="M754 128 L800 168" stroke="#b45309" stroke-width="1.8" fill="none" marker-end="url(#arrW)"/>
+  <text x="748" y="172" class="lbl-sub" fill="#b45309">trees with errors</text>
+  <rect x="800" y="168" width="88" height="56" class="box box-warn"/>
+  <text x="844" y="190" text-anchor="middle" class="lbl">Rejections</text>
+  <text x="844" y="207" text-anchor="middle" class="lbl-sub">line · field · why</text>
+
+  <text x="450" y="262" text-anchor="middle" class="lbl-sub">One bad record never aborts the file (unless the dataset explicitly asks for rejectFile).</text>
+  <text x="450" y="282" text-anchor="middle" class="lbl-sub">Every stage carries the job's correlation id into logs, traces, metrics, and the job timeline.</text>
+</svg>
+<figcaption>Figure 2 — The streaming pipeline: parse → validate → resolve → custom steps, then a clean/rejected split.</figcaption>
+</figure>
+
+<h2>4. The write path: hierarchy without ORM round trips</h2>
+<p>
+The writer never touches rows one at a time. Batches of record trees are flattened per
+entity, bulk-copied into temp staging tables, and merged into the targets level by level —
+parents first. Each merge's <code>OUTPUT</code> clause maps every staged row to the
+database key it received (or already had), and those keys become the children's foreign
+keys in the next level. One transaction per batch; natural keys make re-imports idempotent.
+</p>
+
+<figure class="figure">
+<svg viewBox="0 0 900 330" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- record tree -->
+  <text x="90" y="34" text-anchor="middle" class="lbl">Record trees</text>
+  <circle cx="90" cy="70" r="17" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.4"/>
+  <text x="90" y="75" text-anchor="middle" class="lbl-sub">Order</text>
+  <circle cx="50" cy="130" r="15" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="50" y="134" text-anchor="middle" class="lbl-sub">Line</text>
+  <circle cx="130" cy="130" r="15" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="130" y="134" text-anchor="middle" class="lbl-sub">Line</text>
+  <line x1="80" y1="85" x2="55" y2="116" stroke="#94a3b8" stroke-width="1.2"/>
+  <line x1="100" y1="85" x2="125" y2="116" stroke="#94a3b8" stroke-width="1.2"/>
+
+  <path d="M160 100 L216 100" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr3)"/>
+  <text x="188" y="90" text-anchor="middle" class="lbl-sub">flatten</text>
+
+  <!-- staging -->
+  <rect x="216" y="46" width="180" height="52" class="box"/>
+  <text x="306" y="67" text-anchor="middle" class="lbl-sub">#stage_Order</text>
+  <text x="306" y="84" text-anchor="middle" class="lbl-sub">_StageId · fields</text>
+  <rect x="216" y="118" width="180" height="52" class="box"/>
+  <text x="306" y="139" text-anchor="middle" class="lbl-sub">#stage_Line</text>
+  <text x="306" y="156" text-anchor="middle" class="lbl-sub">_StageId · _ParentKey · fields</text>
+  <text x="306" y="34" text-anchor="middle" class="lbl">Bulk copy (SqlBulkCopy)</text>
+
+  <!-- merge level 1 -->
+  <path d="M396 72 L452 72" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr3)"/>
+  <rect x="452" y="46" width="196" height="52" class="box box-accent"/>
+  <text x="550" y="67" text-anchor="middle" class="lbl-sub">MERGE Orders</text>
+  <text x="550" y="84" text-anchor="middle" class="lbl-sub">ON natural key · upsert</text>
+
+  <path d="M648 72 L704 72" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr3)"/>
+  <rect x="704" y="46" width="176" height="52" class="box box-good"/>
+  <text x="792" y="67" text-anchor="middle" class="lbl-sub">OUTPUT: StageId → OrderId</text>
+  <text x="792" y="84" text-anchor="middle" class="lbl-sub">keys captured per row</text>
+
+  <!-- key propagation -->
+  <path d="M792 98 C 792 150, 420 120, 402 144" stroke="#047857" stroke-width="1.8" fill="none" marker-end="url(#arrG)"/>
+  <text x="620" y="128" text-anchor="middle" class="lbl-sub" fill="#047857">database keys flow down as _ParentKey</text>
+
+  <!-- merge level 2 -->
+  <path d="M396 144 L452 144" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr3)"/>
+  <rect x="452" y="118" width="196" height="52" class="box box-accent"/>
+  <text x="550" y="139" text-anchor="middle" class="lbl-sub">MERGE OrderLines</text>
+  <text x="550" y="156" text-anchor="middle" class="lbl-sub">ON OrderId + natural key</text>
+
+  <path d="M648 144 L704 144" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr3)"/>
+  <rect x="704" y="118" width="176" height="52" class="box box-good"/>
+  <text x="792" y="139" text-anchor="middle" class="lbl-sub">rows inserted / updated</text>
+  <text x="792" y="156" text-anchor="middle" class="lbl-sub">counts reported on the job</text>
+
+  <!-- transaction bracket -->
+  <rect x="206" y="196" width="684" height="44" rx="8" fill="none" stroke="#94a3b8" stroke-dasharray="5 4" stroke-width="1.2"/>
+  <text x="548" y="222" text-anchor="middle" class="lbl-sub">one transaction per batch — repeat for every level of the hierarchy, however deep</text>
+
+  <text x="450" y="280" text-anchor="middle" class="lbl-sub">No per-row inserts, no ORM change tracking, no reflection in the hot path —</text>
+  <text x="450" y="300" text-anchor="middle" class="lbl-sub">staging DDL and MERGE statements are generated from the manifest at run time.</text>
+</svg>
+<figcaption>Figure 3 — Level-by-level staging and merge. The same generated pattern handles one table or ten, two levels or seven.</figcaption>
+</figure>
+
+<h2>5. Capabilities</h2>
+<table>
+  <tr><th style="width:220px">Capability</th><th>How Loadstone delivers it</th></tr>
+  <tr>
+    <td><span class="pill">Input</span>Any shape</td>
+    <td>XML, JSON, and curated CSV (zip-of-CSVs for hierarchies) stream into one canonical
+        record model. Same manifest, same tables, three formats. Unknown elements and
+        properties are ignored, so noisy real-world files still import.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Model</span>Deep hierarchies</td>
+    <td>Unlimited nesting with optional and required children. Foreign keys are wired
+        automatically; sequence comes from document order; upserts are scoped within the
+        parent row.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Reference</span>Pluggable lookups</td>
+    <td>Built-in code-list tables (string code → id) with an HTTP admin API, plus any
+        custom <code>ILookupProvider</code> (REST API, another database, static data).
+        Per-field policies for unknown values: <em>rejectRecord</em>, <em>rejectFile</em>,
+        <em>useDefault</em>, <em>autoCreate</em> — with caching and case-sensitivity control.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Safety</span>Row-level fault isolation</td>
+    <td>Records that fail validation or lookup resolution land in a rejection store with
+        entity, source line/path, field, raw value, and reason. The rest of the file
+        imports. Re-running a fixed file is idempotent thanks to natural-key upserts.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Jobs</span>Durable queues</td>
+    <td>Every dataset gets a named, database-backed queue: survives restarts, safe
+        multi-worker claiming (<code>UPDLOCK/READPAST</code>), exponential-backoff retries,
+        dead-lettering, and automatic reclaim of jobs abandoned by crashed workers.
+        No message broker to install or operate.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Ops</span>Observability</td>
+    <td>Structured Serilog logs; OpenTelemetry traces and metrics (job spans, counters for
+        records read/rejected and rows written, duration histogram) — one environment
+        variable connects any OTLP backend. Job timelines, states, and rejection reports
+        are queryable over HTTP, not buried in log files.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Extend</span>Plugin pipeline</td>
+    <td>Custom <code>IImportStep</code>s run between the built-ins and the writer as plain
+        DI registrations. Datasets can be declared at runtime (JSON over HTTP or files on
+        disk) or in code with compile-time checking via <code>IDataset</code> and static
+        abstract interface members.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Schema</span>DDL from the manifest</td>
+    <td><code>GET /api/datasets/{name}/schema</code> returns idempotent
+        <code>CREATE TABLE</code> scripts (identity keys, parent FKs, unique natural-key
+        indexes); apply them via the API or let startup do it. Pre-existing tables work
+        too — the manifest just maps onto them.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Cloud</span>Azure-ready, not Azure-bound</td>
+    <td>One ASP.NET Core process hosting API + workers: deploy the Dockerfile to App
+        Service, point the connection string at Azure SQL, done. File storage, manifests,
+        and the queue are interface-backed, so Blob Storage or Service Bus are later
+        swap-ins, not rewrites. Runs equally well on a VM or on-premises.</td>
+  </tr>
+</table>
+
+<h2>6. Why this could be popular on GitHub</h2>
+
+<div class="callout honest">
+<strong>Honesty first:</strong> nothing guarantees stars — six-figure counts put a project
+in the company of the largest tools in the industry and take years, visibility, and luck.
+What follows is why Loadstone has the structural ingredients that widely-starred
+infrastructure projects tend to share.
+</div>
+
+<ol class="reasons">
+  <li><strong>A universally felt pain.</strong> "Get this file into my database, properly"
+      is one of the most common tasks in backend, data, and integration work. The audience
+      is not a niche. And the specific corner Loadstone owns — nested XML/JSON/CSV into
+      multi-table hierarchies with row-level forensics — is underserved: most ETL platforms
+      treat it as an afterthought behind heavyweight infrastructure.</li>
+  <li><strong>Time-to-wow under five minutes.</strong> <code>docker compose up</code>,
+      open Swagger, curl a sample file, watch rows and a job timeline appear — database and
+      schema created automatically. Projects win stars in the first five minutes of a
+      visitor's attention or not at all.</li>
+  <li><strong>A shareable artifact at the center.</strong> Manifests are small JSON
+      documents — easy to gist, blog about, review in pull requests, and collect into a
+      community library ("here's a manifest for format X"). Config-as-contract is the same
+      dynamic that helped docker-compose and GitHub Actions spread.</li>
+  <li><strong>Credible engineering underneath.</strong> Streaming everywhere, set-based
+      bulk writes, no per-row reflection, a broker-less durable queue, first-class
+      OpenTelemetry. Experienced developers star what they would defend in an architecture
+      review — and they are the ones whose stars bring more stars.</li>
+  <li><strong>An obvious contribution surface.</strong> The provider seams (PostgreSQL,
+      MySQL, Parquet, Blob Storage, Service Bus) are shaped exactly like good first
+      contributions, and the roadmap invites them. Projects grow when outsiders can add
+      real value without touching the core.</li>
+  <li><strong>Low adoption risk.</strong> MIT license, one container, no dependencies
+      beyond the database you already run, and an escape hatch at every layer. Easy to
+      try, easy to leave — which, paradoxically, is what makes teams stay.</li>
+</ol>
+
+<h3>What it still needs to climb</h3>
+<p>
+A hosted demo or an animated GIF at the top of the README; two or three real-world
+manifest showcases; benchmark numbers ("N&nbsp;GB of XML in M minutes"); the PostgreSQL
+provider, which roughly doubles the addressable audience; and visible, responsive
+maintenance once public — how the first twenty issues are handled is what converts
+visitors into advocates.
+</p>
+
+<footer>
+  Loadstone architecture overview · repository: <code>KadjiProjects/Loadstone</code> ·
+  see also <code>docs/manifest-reference.md</code> for the full manifest specification.
+</footer>
+
+</div>
+</body>
+</html>
