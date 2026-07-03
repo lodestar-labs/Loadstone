@@ -100,6 +100,12 @@ internal sealed class InMemoryJobStore : IImportJobStore
         return Task.CompletedTask;
     }
 
+    public Task ClearRejectedRowsAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        Rejections.RemoveAll(r => r.JobId == jobId);
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<RejectedRow>> GetRejectedRowsAsync(Guid jobId, int top = 1000, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<RejectedRow>>([.. Rejections.Where(r => r.JobId == jobId).Take(top)]);
 }

@@ -1,6 +1,7 @@
 using Loadstone.Jobs;
 using Loadstone.Runtime;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Loadstone.SqlServer;
@@ -9,9 +10,13 @@ namespace Loadstone.SqlServer;
 /// Durable queue on top of the loadstone.Jobs table. Claiming uses UPDLOCK/READPAST so any
 /// number of workers (across processes and machines) compete safely without ever handing
 /// the same job to two of them. Retries use exponential backoff; exhausted jobs dead-letter.
+/// Terminal updates are fenced on (Status, Attempt), so a stale worker whose job was
+/// reclaimed can no longer affect the job record.
 /// </summary>
-public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IOptions<LoadstoneOptions> options)
-    : IImportJobQueue
+public sealed class SqlImportJobQueue(
+    SqlConnectionFactory connectionFactory,
+    IOptions<LoadstoneOptions> options,
+    ILogger<SqlImportJobQueue> logger) : IImportJobQueue
 {
     public async Task EnqueueAsync(ImportJob job, CancellationToken cancellationToken = default)
     {
@@ -54,6 +59,7 @@ public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IO
             UPDATE next
             SET Status = N'Processing',
                 StartedAt = SYSDATETIMEOFFSET(),
+                HeartbeatAt = SYSDATETIMEOFFSET(),
                 Attempt = Attempt + 1
             OUTPUT inserted.*;
             """;
@@ -63,6 +69,15 @@ public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IO
         command.Parameters.AddWithValue("@Queue", queue);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         return await reader.ReadAsync(cancellationToken) ? JobMapper.Read(reader) : null;
+    }
+
+    public async Task HeartbeatAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        const string sql = "UPDATE loadstone.Jobs SET HeartbeatAt = SYSDATETIMEOFFSET() WHERE Id = @Id AND Status = N'Processing';";
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@Id", jobId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task CompleteAsync(ImportJob job, CancellationToken cancellationToken = default)
@@ -77,19 +92,25 @@ public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IO
                 RecordsRejected = @RecordsRejected,
                 RowsInserted = @RowsInserted,
                 RowsUpdated = @RowsUpdated
-            WHERE Id = @Id;
+            WHERE Id = @Id AND Status = N'Processing' AND Attempt = @Attempt;
             """;
 
         job.CompletedAt = DateTimeOffset.UtcNow;
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@Id", job.Id);
+        command.Parameters.AddWithValue("@Attempt", job.Attempt);
         command.Parameters.AddWithValue("@Status", job.Status.ToString());
         command.Parameters.AddWithValue("@RecordsRead", job.RecordsRead);
         command.Parameters.AddWithValue("@RecordsRejected", job.RecordsRejected);
         command.Parameters.AddWithValue("@RowsInserted", job.RowsInserted);
         command.Parameters.AddWithValue("@RowsUpdated", job.RowsUpdated);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            logger.LogWarning(
+                "Completion of job {JobId} attempt {Attempt} was ignored: the job was reclaimed or finished by another worker",
+                job.Id, job.Attempt);
+        }
     }
 
     public async Task FailAsync(ImportJob job, string error, CancellationToken cancellationToken = default)
@@ -117,16 +138,37 @@ public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IO
                 Error = @Error,
                 NextAttemptAt = @NextAttemptAt,
                 CompletedAt = @CompletedAt
-            WHERE Id = @Id;
+            WHERE Id = @Id AND Status = N'Processing' AND Attempt = @Attempt;
             """;
 
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@Id", job.Id);
+        command.Parameters.AddWithValue("@Attempt", job.Attempt);
         command.Parameters.AddWithValue("@Status", job.Status.ToString());
         command.Parameters.AddWithValue("@Error", error);
         command.Parameters.AddWithValue("@NextAttemptAt", (object?)job.NextAttemptAt ?? DBNull.Value);
         command.Parameters.AddWithValue("@CompletedAt", (object?)job.CompletedAt ?? DBNull.Value);
+        if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+        {
+            logger.LogWarning(
+                "Failure of job {JobId} attempt {Attempt} was ignored: the job was reclaimed or finished by another worker",
+                job.Id, job.Attempt);
+        }
+    }
+
+    public async Task ReleaseAsync(ImportJob job, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE loadstone.Jobs
+            SET Status = N'Pending', Attempt = Attempt - 1, NextAttemptAt = NULL, HeartbeatAt = NULL
+            WHERE Id = @Id AND Status = N'Processing' AND Attempt = @Attempt;
+            """;
+
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@Id", job.Id);
+        command.Parameters.AddWithValue("@Attempt", job.Attempt);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -136,7 +178,7 @@ public sealed class SqlImportJobQueue(SqlConnectionFactory connectionFactory, IO
             UPDATE loadstone.Jobs
             SET Status = N'Pending', NextAttemptAt = NULL
             WHERE Status = N'Processing'
-              AND StartedAt < DATEADD(SECOND, -@Seconds, SYSDATETIMEOFFSET());
+              AND COALESCE(HeartbeatAt, StartedAt) < DATEADD(SECOND, -@Seconds, SYSDATETIMEOFFSET());
             """;
 
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);

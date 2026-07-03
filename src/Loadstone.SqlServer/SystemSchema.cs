@@ -28,6 +28,7 @@ internal static class SystemSchema
             CreatedAt       datetimeoffset   NOT NULL,
             NextAttemptAt   datetimeoffset   NULL,
             StartedAt       datetimeoffset   NULL,
+            HeartbeatAt     datetimeoffset   NULL,
             CompletedAt     datetimeoffset   NULL,
             Error           nvarchar(max)    NULL,
             RecordsRead     bigint           NOT NULL CONSTRAINT DF_loadstone_Jobs_Read DEFAULT (0),
@@ -39,6 +40,10 @@ internal static class SystemSchema
         """
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_loadstone_Jobs_Queue' AND object_id = OBJECT_ID(N'loadstone.Jobs'))
             CREATE INDEX IX_loadstone_Jobs_Queue ON loadstone.Jobs (QueueName, Status, NextAttemptAt, CreatedAt);
+        """,
+        """
+        IF COL_LENGTH(N'loadstone.Jobs', N'HeartbeatAt') IS NULL
+            ALTER TABLE loadstone.Jobs ADD HeartbeatAt datetimeoffset NULL;
         """,
         """
         IF OBJECT_ID(N'loadstone.JobEvents') IS NULL

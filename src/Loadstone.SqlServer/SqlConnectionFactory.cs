@@ -12,20 +12,29 @@ public sealed class SqlConnectionFactory(IOptions<LoadstoneOptions> options)
 
     internal string ConnectionString => _connectionString;
 
-    public async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken = default)
-    {
-        var connection = new SqlConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-        return connection;
-    }
+    public Task<SqlConnection> OpenAsync(CancellationToken cancellationToken = default) =>
+        OpenCoreAsync(_connectionString, cancellationToken);
 
     /// <summary>Opens a connection to the same server's master database (for CREATE DATABASE).</summary>
-    internal async Task<SqlConnection> OpenMasterAsync(CancellationToken cancellationToken = default)
+    internal Task<SqlConnection> OpenMasterAsync(CancellationToken cancellationToken = default)
     {
         var builder = new SqlConnectionStringBuilder(_connectionString) { InitialCatalog = "master" };
-        var connection = new SqlConnection(builder.ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        return connection;
+        return OpenCoreAsync(builder.ConnectionString, cancellationToken);
+    }
+
+    private static async Task<SqlConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
+    {
+        var connection = new SqlConnection(connectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken);
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
     }
 
     internal string DatabaseName => new SqlConnectionStringBuilder(_connectionString).InitialCatalog;

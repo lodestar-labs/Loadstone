@@ -50,6 +50,13 @@ public sealed class ImportEngine(
             .ToArray();
 
         var stopwatch = Stopwatch.StartNew();
+        if (job.Attempt > 1)
+        {
+            // Retries re-read the whole file; drop the previous attempt's rejections so
+            // reports reflect the current state of the data.
+            await jobStore.ClearRejectedRowsAsync(job.Id, cancellationToken);
+        }
+
         await jobStore.AddEventAsync(
             new JobEvent(job.Id, DateTimeOffset.UtcNow, "start",
                 $"Importing '{job.FileName}' ({job.Format}) with steps: {string.Join(" → ", orderedSteps.Select(s => s.Name))}."),

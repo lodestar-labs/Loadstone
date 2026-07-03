@@ -18,6 +18,9 @@ public interface IImportJobStore
 
     Task AddRejectedRowsAsync(IReadOnlyList<RejectedRow> rows, CancellationToken cancellationToken = default);
 
+    /// <summary>Removes a job's rejected rows — called before a retry so counts reflect the latest attempt.</summary>
+    Task ClearRejectedRowsAsync(Guid jobId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<RejectedRow>> GetRejectedRowsAsync(Guid jobId, int top = 1000, CancellationToken cancellationToken = default);
 }
 

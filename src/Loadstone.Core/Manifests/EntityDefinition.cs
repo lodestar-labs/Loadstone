@@ -37,5 +37,5 @@ public sealed class EntityDefinition
     public EntityDefinition? FindChild(string name) =>
         Children.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    public string QualifiedTable => $"[{Schema}].[{Table}]";
+    public string QualifiedTable => $"[{Schema.Replace("]", "]]")}].[{Table.Replace("]", "]]")}]";
 }

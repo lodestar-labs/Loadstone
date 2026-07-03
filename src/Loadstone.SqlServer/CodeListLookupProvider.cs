@@ -60,26 +60,25 @@ public sealed class CodeListLookupProvider(SqlConnectionFactory connectionFactor
         command.Parameters.AddWithValue("@List", list);
         command.Parameters.AddWithValue("@Value", value);
 
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            var result = await command.ExecuteScalarAsync(cancellationToken);
-            return Convert.ToInt32(result);
-        }
-        catch (SqlException ex) when (ex.Number is 2627 or 2601)
-        {
-            // Unique violation: another worker created the list or code between our
-            // check and insert.
-            logger.LogDebug("Code '{Code}' in list '{List}' was created concurrently; re-resolving", value, list);
-            var existing = await ResolveAsync(list, value, caseInsensitive: false, cancellationToken);
-            if (existing.Found)
+            try
             {
-                return existing.Value;
+                var result = await command.ExecuteScalarAsync(cancellationToken);
+                return Convert.ToInt32(result);
             }
-
-            // The other worker created the list but not this code; a second attempt
-            // finds the list in place and inserts the code.
-            var retried = await command.ExecuteScalarAsync(cancellationToken);
-            return Convert.ToInt32(retried);
+            catch (SqlException ex) when (ex.Number is 2627 or 2601 && attempt < 2)
+            {
+                // Unique violation: another worker created the list or the code (possibly
+                // differing only in case) between our check and insert. Resolve leniently
+                // first; if the list exists but the code still doesn't, loop and insert.
+                logger.LogDebug("Code '{Code}' in list '{List}' was created concurrently; re-resolving", value, list);
+                var existing = await ResolveAsync(list, value, caseInsensitive: true, cancellationToken);
+                if (existing.Found)
+                {
+                    return existing.Value;
+                }
+            }
         }
     }
 }

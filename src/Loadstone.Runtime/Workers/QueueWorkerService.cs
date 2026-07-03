@@ -117,6 +117,8 @@ public sealed class QueueWorkerService(
 
         var stopwatch = Stopwatch.StartNew();
         string outcomeTag;
+        using var heartbeatStopper = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var heartbeat = PulseHeartbeatAsync(job.Id, heartbeatStopper.Token);
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
@@ -135,6 +137,17 @@ public sealed class QueueWorkerService(
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
+            // Graceful shutdown: hand the job back immediately (without consuming an
+            // attempt) instead of leaving it Processing until the reclaim timeout.
+            try
+            {
+                await queue.ReleaseAsync(job, CancellationToken.None);
+            }
+            catch (Exception releaseEx)
+            {
+                logger.LogWarning(releaseEx, "Could not release job {JobId} during shutdown; reclaim will recover it", job.Id);
+            }
+
             throw;
         }
         catch (Exception ex)
@@ -143,6 +156,11 @@ public sealed class QueueWorkerService(
             await queue.FailAsync(job, ex.Message, CancellationToken.None);
             outcomeTag = job.Status == ImportJobStatus.DeadLettered ? "DeadLettered" : "Failed";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+        }
+        finally
+        {
+            heartbeatStopper.Cancel();
+            await heartbeat;
         }
 
         stopwatch.Stop();
@@ -154,6 +172,27 @@ public sealed class QueueWorkerService(
         LoadstoneDiagnostics.JobsCompleted.Add(1, tags);
         LoadstoneDiagnostics.JobDuration.Record(stopwatch.Elapsed.TotalSeconds, tags);
         activity?.SetTag("loadstone.outcome", outcomeTag);
+    }
+
+    private async Task PulseHeartbeatAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(60), cancellationToken);
+                await queue.HeartbeatAsync(jobId, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                // A missed pulse is harmless as long as the reclaim timeout is generous.
+                logger.LogDebug(ex, "Heartbeat for job {JobId} failed", jobId);
+            }
+        }
     }
 
     private async Task ReclaimAbandonedLoopAsync(CancellationToken stoppingToken)

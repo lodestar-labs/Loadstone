@@ -15,8 +15,24 @@ public interface IImportJobQueue
     /// </summary>
     Task<ImportJob?> TryClaimAsync(string queue, CancellationToken cancellationToken = default);
 
-    /// <summary>Persists the terminal state of a finished attempt (Succeeded/CompletedWithRejections).</summary>
+    /// <summary>
+    /// Signals that the claiming worker is still alive and processing. Long-running jobs
+    /// pulse this so the abandoned-job reclaim never steals work from a live worker.
+    /// </summary>
+    Task HeartbeatAsync(Guid jobId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Persists the terminal state of a finished attempt (Succeeded/CompletedWithRejections).
+    /// Implementations must fence on the claiming attempt so a reclaimed job cannot be
+    /// clobbered by its previous, stale worker.
+    /// </summary>
     Task CompleteAsync(ImportJob job, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns a claimed job to Pending without consuming an attempt — used on graceful
+    /// shutdown so in-flight jobs restart immediately instead of waiting for reclaim.
+    /// </summary>
+    Task ReleaseAsync(ImportJob job, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Records a failed attempt: schedules a retry with exponential backoff, or dead-letters

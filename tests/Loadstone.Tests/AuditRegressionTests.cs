@@ -67,10 +67,37 @@ public class AuditRegressionTests
     }
 
     [Test]
+    public void Field_column_colliding_with_key_column_is_invalid()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Fields.Add(new FieldDefinition { Name = "OrderId" });
+
+        Assert.That(manifest.Validate(), Has.Some.Contains("keyColumn"));
+    }
+
+    [Test]
+    public void Field_column_colliding_with_parent_key_column_is_invalid()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children[0].Fields.Add(new FieldDefinition { Name = "OrderId" });
+
+        Assert.That(manifest.Validate(), Has.Some.Contains("parentKeyColumn"));
+    }
+
+    [Test]
     public void Lookup_value_kind_defaults_to_int()
     {
         var ddl = SqlServerImportWriter.BuildStagingDdl(TestData.Orders().Root, "#stg", "#out", hasParent: false);
 
         Assert.That(ddl, Does.Contain("[Country] int NULL"));
+    }
+
+    [Test]
+    public void Qualified_table_names_escape_closing_brackets()
+    {
+        var entity = TestData.Orders().Root;
+        entity.Table = "Ord]ers";
+
+        Assert.That(entity.QualifiedTable, Is.EqualTo("[dbo].[Ord]]ers]"));
     }
 }

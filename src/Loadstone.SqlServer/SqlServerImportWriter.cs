@@ -27,63 +27,96 @@ public sealed class SqlServerImportWriter(
         IAsyncEnumerable<DataRecord> acceptedRoots,
         CancellationToken cancellationToken = default)
     {
+        // Entities without a natural key insert unconditionally, so a retried job would
+        // duplicate whatever earlier batches already committed. For those datasets the
+        // whole job runs in one transaction — nothing is left behind for a retry to
+        // duplicate. Keyed datasets keep the cheaper transaction-per-batch: their merges
+        // are idempotent on re-import.
+        var singleTransaction = context.Manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0);
+        return singleTransaction
+            ? await WriteJobScopedAsync(context, acceptedRoots, cancellationToken)
+            : await WriteBatchScopedAsync(context, acceptedRoots, cancellationToken);
+    }
+
+    private async Task<WriteResult> WriteBatchScopedAsync(
+        ImportContext context,
+        IAsyncEnumerable<DataRecord> acceptedRoots,
+        CancellationToken cancellationToken)
+    {
         var batchSize = Math.Max(1, options.Value.WriterBatchSize);
         var batch = new List<DataRecord>(batchSize);
         long inserted = 0, updated = 0;
+
+        async Task FlushAsync()
+        {
+            await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var counts = await WriteBatchCoreAsync(connection, transaction, context.Manifest, batch, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                inserted += counts.Inserted;
+                updated += counts.Updated;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
+            }
+
+            LogBatch(context, batch.Count);
+            batch.Clear();
+        }
 
         await foreach (var root in acceptedRoots.WithCancellation(cancellationToken))
         {
             batch.Add(root);
             if (batch.Count >= batchSize)
             {
-                (inserted, updated) = await FlushAsync(context, batch, inserted, updated, cancellationToken);
+                await FlushAsync();
             }
         }
 
         if (batch.Count > 0)
         {
-            (inserted, updated) = await FlushAsync(context, batch, inserted, updated, cancellationToken);
+            await FlushAsync();
         }
 
         return new WriteResult(inserted, updated);
     }
 
-    private async Task<(long Inserted, long Updated)> FlushAsync(
+    private async Task<WriteResult> WriteJobScopedAsync(
         ImportContext context,
-        List<DataRecord> batch,
-        long inserted,
-        long updated,
+        IAsyncEnumerable<DataRecord> acceptedRoots,
         CancellationToken cancellationToken)
     {
-        var result = await WriteBatchAsync(context.Manifest, batch, cancellationToken);
-        logger.LogDebug(
-            "Batch of {RootCount} root records written for dataset {Dataset}: {Inserted} inserted, {Updated} updated",
-            batch.Count, context.Manifest.Name, result.Inserted, result.Updated);
-        batch.Clear();
-        return (inserted + result.Inserted, updated + result.Updated);
-    }
+        var batchSize = Math.Max(1, options.Value.WriterBatchSize);
+        var batch = new List<DataRecord>(batchSize);
+        long inserted = 0, updated = 0;
 
-    private async Task<(long Inserted, long Updated)> WriteBatchAsync(
-        DatasetManifest manifest,
-        List<DataRecord> roots,
-        CancellationToken cancellationToken)
-    {
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
-
-        long inserted = 0, updated = 0;
         try
         {
-            foreach (var (entity, rows) in GroupByEntity(manifest, roots))
+            await foreach (var root in acceptedRoots.WithCancellation(cancellationToken))
             {
-                if (rows.Count == 0)
+                batch.Add(root);
+                if (batch.Count >= batchSize)
                 {
-                    continue;
+                    var counts = await WriteBatchCoreAsync(connection, transaction, context.Manifest, batch, cancellationToken);
+                    inserted += counts.Inserted;
+                    updated += counts.Updated;
+                    LogBatch(context, batch.Count);
+                    batch.Clear();
                 }
+            }
 
-                var counts = await MergeEntityAsync(connection, transaction, entity, rows, cancellationToken);
+            if (batch.Count > 0)
+            {
+                var counts = await WriteBatchCoreAsync(connection, transaction, context.Manifest, batch, cancellationToken);
                 inserted += counts.Inserted;
                 updated += counts.Updated;
+                LogBatch(context, batch.Count);
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -92,6 +125,36 @@ public sealed class SqlServerImportWriter(
         {
             await transaction.RollbackAsync(CancellationToken.None);
             throw;
+        }
+
+        return new WriteResult(inserted, updated);
+    }
+
+    private void LogBatch(ImportContext context, int rootCount) =>
+        logger.LogDebug(
+            "Batch of {RootCount} root records staged for dataset {Dataset}",
+            rootCount, context.Manifest.Name);
+
+    private static async Task<(long Inserted, long Updated)> WriteBatchCoreAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        DatasetManifest manifest,
+        List<DataRecord> roots,
+        CancellationToken cancellationToken)
+    {
+        long inserted = 0, updated = 0;
+        var groups = GroupByEntity(manifest, roots);
+        for (var ordinal = 0; ordinal < groups.Count; ordinal++)
+        {
+            var (entity, rows) = groups[ordinal];
+            if (rows.Count == 0)
+            {
+                continue;
+            }
+
+            var counts = await MergeEntityAsync(connection, transaction, entity, ordinal, rows, cancellationToken);
+            inserted += counts.Inserted;
+            updated += counts.Updated;
         }
 
         return (inserted, updated);
@@ -126,12 +189,14 @@ public sealed class SqlServerImportWriter(
         SqlConnection connection,
         SqlTransaction transaction,
         EntityDefinition entity,
+        int ordinal,
         List<(DataRecord Record, DataRecord? Parent)> rows,
         CancellationToken cancellationToken)
     {
         var hasParent = entity.ParentKeyColumn is not null;
-        var stageName = $"#ls_stage_{Sanitize(entity.Name)}";
-        var outName = $"#ls_out_{Sanitize(entity.Name)}";
+        // Ordinal-based names: entity names that sanitize identically can never collide.
+        var stageName = $"#ls_stage_{ordinal}";
+        var outName = $"#ls_out_{ordinal}";
 
         await ExecuteAsync(connection, transaction, BuildStagingDdl(entity, stageName, outName, hasParent), cancellationToken);
         await BulkCopyAsync(connection, transaction, entity, rows, stageName, hasParent, cancellationToken);
@@ -328,7 +393,4 @@ public sealed class SqlServerImportWriter(
         await using var command = new SqlCommand(sql, connection, transaction) { CommandTimeout = 0 };
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
-
-    private static string Sanitize(string name) =>
-        string.Concat(name.Where(char.IsLetterOrDigit));
 }

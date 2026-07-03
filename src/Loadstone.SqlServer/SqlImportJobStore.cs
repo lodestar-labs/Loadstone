@@ -126,6 +126,14 @@ public sealed class SqlImportJobStore(SqlConnectionFactory connectionFactory) : 
         await bulkCopy.WriteToServerAsync(table, cancellationToken);
     }
 
+    public async Task ClearRejectedRowsAsync(Guid jobId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand("DELETE FROM loadstone.RejectedRows WHERE JobId = @JobId;", connection);
+        command.Parameters.AddWithValue("@JobId", jobId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<RejectedRow>> GetRejectedRowsAsync(Guid jobId, int top = 1000, CancellationToken cancellationToken = default)
     {
         const string sql = """

@@ -122,6 +122,17 @@ public sealed class DatasetManifest
                 errors.Add($"{scope}: duplicate target column '{field.ColumnName}'.");
             }
 
+            if (string.Equals(field.ColumnName, entity.KeyColumn, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{scope}.{field.Name}: column '{field.ColumnName}' collides with the entity's keyColumn (the key is database-generated).");
+            }
+
+            if (entity.ParentKeyColumn is { } parentKeyColumn
+                && string.Equals(field.ColumnName, parentKeyColumn, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{scope}.{field.Name}: column '{field.ColumnName}' collides with parentKeyColumn (the foreign key is wired automatically).");
+            }
+
             if (field.Lookup is { } lookup && string.IsNullOrWhiteSpace(lookup.List))
             {
                 errors.Add($"{scope}.{field.Name}: lookup requires a 'list' name.");
