@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Orders>
+  <Order>
+    <OrderNumber>ORD-1001</OrderNumber>
+    <OrderDate>2026-06-01</OrderDate>
+    <Country>DK</Country>
+    <Total>249.50</Total>
+    <Line>
+      <LineNumber>1</LineNumber>
+      <Sku>KB-201</Sku>
+      <Quantity>2</Quantity>
+    </Line>
+    <Line>
+      <LineNumber>2</LineNumber>
+      <Sku>MS-115</Sku>
+      <Quantity>1</Quantity>
+    </Line>
+  </Order>
+  <Order>
+    <OrderNumber>ORD-1002</OrderNumber>
+    <OrderDate>2026-06-02</OrderDate>
+    <Country>SE</Country>
+    <Total>89.00</Total>
+    <Line>
+      <LineNumber>1</LineNumber>
+      <Sku>HD-330</Sku>
+      <Quantity>3</Quantity>
+    </Line>
+  </Order>
+  <Order>
+    <OrderNumber>ORD-1003</OrderNumber>
+    <OrderDate>2026-06-03</OrderDate>
+    <Country>NO</Country>
+    <Total>1240.00</Total>
+  </Order>
+</Orders>

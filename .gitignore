@@ -1,0 +1,25 @@
+## .NET build artifacts
+bin/
+obj/
+out/
+*.user
+*.suo
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## Test results and coverage
+TestResults/
+coverage*.json
+coverage*.xml
+*.trx
+
+## Local runtime data (uploads, registered manifests)
+data/
+
+## OS noise
+.DS_Store
+Thumbs.db

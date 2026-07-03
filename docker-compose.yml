@@ -1,0 +1,29 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Loadstone!Dev1"
+    ports:
+      - "14333:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+
+  loadstone:
+    build: .
+    depends_on:
+      - db
+    environment:
+      Loadstone__ConnectionString: "Server=db;Database=Loadstone;User Id=sa;Password=Loadstone!Dev1;TrustServerCertificate=True"
+      Loadstone__AutoCreateTargetTables: "true"
+      Loadstone__ManifestDirectory: "/app/data/datasets"
+      Loadstone__FileStorePath: "/app/data/imports"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./samples/orders/orders.dataset.json:/app/data/datasets/orders.json:ro
+      - loadstone-data:/app/data/imports
+
+volumes:
+  mssql-data:
+  loadstone-data:
