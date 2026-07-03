@@ -23,6 +23,14 @@ new database providers.
   without a database.
 - Match the existing code style; `.editorconfig` does most of the enforcing.
 
+## Licensing of contributions
+
+Loadstone uses the Business Source License 1.1 with a commercial tier (see
+[COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). By submitting a contribution you agree
+it may be distributed under the project's current license and under commercial
+licenses, and that the project may be relicensed in the future. You keep the copyright
+to your work.
+
 ## Pull requests
 
 - One logical change per PR.

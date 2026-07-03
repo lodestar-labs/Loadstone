@@ -9,7 +9,7 @@ hierarchy, types, keys, and reference-data rules — and Loadstone turns any of 
 into clean relational rows: validated, upserted, fully observable, and never silently lost.
 
 [![CI](https://github.com/KadjiProjects/Loadstone/actions/workflows/ci.yml/badge.svg)](https://github.com/KadjiProjects/Loadstone/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
 ---
@@ -222,4 +222,9 @@ see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+Loadstone is source-available under the [Business Source License 1.1](LICENSE):
+**free for self-hosted production use at any scale, commercial or not.** Each release
+converts to Apache 2.0 four years after it ships. The two things that require a
+[commercial license](COMMERCIAL-LICENSE.md) are offering Loadstone as a hosted service
+to third parties and embedding it in a product you sell. Enterprise support plans and
+OEM licenses are available — see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
