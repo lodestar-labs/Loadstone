@@ -39,8 +39,10 @@ public sealed class ValidateStep : IImportStep
 
             if (field.Lookup is not null)
             {
-                // Conversion happens in the lookup step; only the presence check applies here.
-                if (field.Required && string.IsNullOrWhiteSpace(raw) && string.IsNullOrWhiteSpace(field.Lookup.Default ?? field.Default))
+                // Conversion happens in the lookup step; only the presence check applies
+                // here. lookup.Default is a fallback for *unknown* values, not missing
+                // ones, so it does not satisfy a required field.
+                if (field.Required && string.IsNullOrWhiteSpace(raw) && string.IsNullOrWhiteSpace(field.Default))
                 {
                     record.AddError(field.Name, "Required value is missing.");
                 }

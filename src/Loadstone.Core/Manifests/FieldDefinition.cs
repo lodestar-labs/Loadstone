@@ -86,6 +86,13 @@ public sealed class LookupSettings
 
     public bool CaseInsensitive { get; set; } = true;
 
+    /// <summary>
+    /// Type of the value the provider resolves to, which is also the target column type.
+    /// The built-in code-list provider returns int ids (the default); custom providers
+    /// may resolve to strings, guids, etc.
+    /// </summary>
+    public FieldKind ValueKind { get; set; } = FieldKind.Int32;
+
     /// <summary>Raw value resolved instead when <see cref="OnMissing"/> is UseDefault.</summary>
     public string? Default { get; set; }
 }

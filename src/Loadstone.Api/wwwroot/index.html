@@ -371,12 +371,13 @@
           return "<tr><td><strong>" + esc(d.name) + "</strong></td><td>" + esc(d.version) + "</td>" +
             "<td>" + esc(d.description || "") + "</td><td>" + esc(d.queue) + "</td>" +
             "<td>" + d.entities.map(esc).join(" → ") + "</td>" +
-            '<td><button class="ghost" onclick="openManifest(\'' + esc(d.name) + '\')">Manifest</button></td></tr>';
+            '<td><button class="ghost" onclick="openManifest(\'' + encodeURIComponent(d.name) + '\')">Manifest</button></td></tr>';
         }).join("") + "</tbody></table>";
     }).catch(function (error) { toast(error.message, true); });
   }
 
   window.openManifest = function (name) {
+    name = decodeURIComponent(name);
     api("/api/datasets/" + encodeURIComponent(name)).then(function (manifest) {
       $("manifestCard").style.display = "";
       $("manifestTitle").textContent = "Manifest — " + name;
@@ -397,7 +398,7 @@
       $("codeListsTable").innerHTML = lists.length
         ? "<table><thead><tr><th>List</th><th class=\"num\">Codes</th></tr></thead><tbody>" +
           lists.map(function (l) {
-            return '<tr class="clickable" onclick="openCodes(\'' + esc(l.name) + '\')"><td>' +
+            return '<tr class="clickable" onclick="openCodes(\'' + encodeURIComponent(l.name) + '\')"><td>' +
               esc(l.name) + '</td><td class="num">' + l.codeCount + "</td></tr>";
           }).join("") + "</tbody></table>"
         : '<div class="empty">No code lists yet. Select a name and save codes to create one, or let autoCreate fill lists during imports.</div>';
@@ -405,6 +406,7 @@
   }
 
   window.openCodes = function (list) {
+    list = decodeURIComponent(list);
     currentList = list;
     $("codesTitle").textContent = "Codes — " + list;
     $("codesEditor").style.display = "";

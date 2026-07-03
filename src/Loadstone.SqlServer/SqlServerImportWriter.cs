@@ -135,7 +135,18 @@ public sealed class SqlServerImportWriter(
 
         await ExecuteAsync(connection, transaction, BuildStagingDdl(entity, stageName, outName, hasParent), cancellationToken);
         await BulkCopyAsync(connection, transaction, entity, rows, stageName, hasParent, cancellationToken);
-        await ExecuteAsync(connection, transaction, BuildMergeSql(entity, stageName, outName, hasParent), cancellationToken);
+        try
+        {
+            await ExecuteAsync(connection, transaction, BuildMergeSql(entity, stageName, outName, hasParent), cancellationToken);
+        }
+        catch (SqlException ex) when (ex.Number == 8672)
+        {
+            throw new InvalidOperationException(
+                $"The file contains multiple '{entity.Name}' records with the same natural key " +
+                $"({string.Join(", ", entity.NaturalKey)}) under the same parent, which cannot be merged in one batch. " +
+                "Deduplicate the source data or adjust the entity's natural key.",
+                ex);
+        }
 
         long inserted = 0, updated = 0;
         var readback = $"SELECT _Action, _DbKey, _StageId FROM {outName};";

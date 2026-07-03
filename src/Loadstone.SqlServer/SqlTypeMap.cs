@@ -5,15 +5,14 @@ namespace Loadstone.SqlServer;
 /// <summary>Maps manifest field kinds to SQL Server column types and CLR staging types.</summary>
 internal static class SqlTypeMap
 {
-    /// <summary>SQL column type for a field. Lookup fields store the resolved id (int).</summary>
+    /// <summary>
+    /// SQL column type for a field. Lookup fields store the resolved value, so their
+    /// column type follows the lookup's valueKind (int for the built-in code lists).
+    /// </summary>
     public static string SqlTypeFor(FieldDefinition field, bool indexable = false)
     {
-        if (field.Lookup is not null)
-        {
-            return "int";
-        }
-
-        return field.Type switch
+        var kind = field.Lookup?.ValueKind ?? field.Type;
+        return kind switch
         {
             FieldKind.String => $"nvarchar({StringLength(field, indexable)})",
             FieldKind.Int32 => "int",
@@ -32,12 +31,8 @@ internal static class SqlTypeMap
     /// <summary>CLR type used in staging DataTables (bulk copy friendly).</summary>
     public static Type ClrTypeFor(FieldDefinition field)
     {
-        if (field.Lookup is not null)
-        {
-            return typeof(int);
-        }
-
-        return field.Type switch
+        var kind = field.Lookup?.ValueKind ?? field.Type;
+        return kind switch
         {
             FieldKind.String => typeof(string),
             FieldKind.Int32 => typeof(int),

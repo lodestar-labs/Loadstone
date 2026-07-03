@@ -91,6 +91,7 @@ code's integer id), not the raw source string.
 | `onMissing` | enum | `rejectRecord` | `rejectRecord`, `rejectFile`, `useDefault`, `autoCreate`. |
 | `caseInsensitive` | bool | `true` | Match codes case-insensitively. |
 | `default` | string | – | Raw value resolved instead, with `useDefault`. |
+| `valueKind` | enum | `int32` | Type the provider resolves to (and the target column type). The built-in code lists return int ids; custom providers may return strings, guids, etc. |
 
 Policies:
 

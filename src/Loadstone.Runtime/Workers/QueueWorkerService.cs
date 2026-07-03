@@ -39,8 +39,13 @@ public sealed class QueueWorkerService(
                 var concurrency = Math.Max(1, manifest.Queue.Concurrency);
                 for (var slot = 0; slot < concurrency; slot++)
                 {
+                    // Only start a loop when the slot has none: passing the call into
+                    // TryAdd would start a runaway duplicate loop on every scan.
                     var loopKey = $"{queueName}#{slot}";
-                    _queueLoops.TryAdd(loopKey, RunQueueLoopAsync(queueName, stoppingToken));
+                    if (!_queueLoops.ContainsKey(loopKey))
+                    {
+                        _queueLoops[loopKey] = RunQueueLoopAsync(queueName, stoppingToken);
+                    }
                 }
             }
 
