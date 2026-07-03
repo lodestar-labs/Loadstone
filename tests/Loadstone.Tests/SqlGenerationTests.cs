@@ -15,7 +15,9 @@ public class MergeSqlTests
         Assert.Multiple(() =>
         {
             Assert.That(sql, Does.Contain("MERGE [dbo].[Orders] WITH (HOLDLOCK)"));
-            Assert.That(sql, Does.Contain("(t.[OrderNumber] = s.[OrderNumber] OR (t.[OrderNumber] IS NULL AND s.[OrderNumber] IS NULL))"));
+            // OrderNumber is required, so the merge uses seekable plain equality.
+            Assert.That(sql, Does.Contain("t.[OrderNumber] = s.[OrderNumber]"));
+            Assert.That(sql, Does.Not.Contain("OrderNumber] IS NULL"));
             Assert.That(sql, Does.Contain("WHEN MATCHED THEN UPDATE SET"));
             Assert.That(sql, Does.Contain("t.[Total] = s.[Total]"));
             Assert.That(sql, Does.Not.Contain("t.[OrderNumber] = s.[OrderNumber],"), "key columns must not be updated");
@@ -35,6 +37,16 @@ public class MergeSqlTests
             Assert.That(sql, Does.Contain("INSERT ([OrderId], [LineNumber], [Sku], [Quantity])"));
             Assert.That(sql, Does.Contain("VALUES (s._ParentKey, s.[LineNumber], s.[Sku], s.[Quantity])"));
         });
+    }
+
+    [Test]
+    public void Optional_natural_key_columns_keep_null_safe_comparison()
+    {
+        var entity = TestData.Orders().Root;
+        entity.NaturalKey = ["Total"];
+        var sql = SqlServerImportWriter.BuildMergeSql(entity, "#stg", "#out", hasParent: false);
+
+        Assert.That(sql, Does.Contain("(t.[Total] = s.[Total] OR (t.[Total] IS NULL AND s.[Total] IS NULL))"));
     }
 
     [Test]

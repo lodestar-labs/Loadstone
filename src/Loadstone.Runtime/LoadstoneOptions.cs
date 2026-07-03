@@ -28,6 +28,12 @@ public sealed class LoadstoneOptions
     /// <summary>Root records per write batch (one transaction per batch).</summary>
     public int WriterBatchSize { get; set; } = 500;
 
+    /// <summary>
+    /// Also flush a batch when it holds this many records in total. Deep hierarchies pack
+    /// thousands of records under one root, so batching by roots alone can balloon memory.
+    /// </summary>
+    public int WriterBatchMaxRecords { get; set; } = 50_000;
+
     /// <summary>Delete the uploaded file from the file store after a successful import.</summary>
     public bool DeleteFilesAfterImport { get; set; }
 

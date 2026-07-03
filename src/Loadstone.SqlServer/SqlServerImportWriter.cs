@@ -43,8 +43,9 @@ public sealed class SqlServerImportWriter(
         IAsyncEnumerable<DataRecord> acceptedRoots,
         CancellationToken cancellationToken)
     {
-        var batchSize = Math.Max(1, options.Value.WriterBatchSize);
+        var (batchSize, maxRecords) = BatchLimits();
         var batch = new List<DataRecord>(batchSize);
+        var batchRecords = 0;
         long inserted = 0, updated = 0;
 
         async Task FlushAsync()
@@ -66,12 +67,14 @@ public sealed class SqlServerImportWriter(
 
             LogBatch(context, batch.Count);
             batch.Clear();
+            batchRecords = 0;
         }
 
         await foreach (var root in acceptedRoots.WithCancellation(cancellationToken))
         {
             batch.Add(root);
-            if (batch.Count >= batchSize)
+            batchRecords += root.SelfAndDescendants().Count();
+            if (batch.Count >= batchSize || batchRecords >= maxRecords)
             {
                 await FlushAsync();
             }
@@ -90,33 +93,38 @@ public sealed class SqlServerImportWriter(
         IAsyncEnumerable<DataRecord> acceptedRoots,
         CancellationToken cancellationToken)
     {
-        var batchSize = Math.Max(1, options.Value.WriterBatchSize);
+        var (batchSize, maxRecords) = BatchLimits();
         var batch = new List<DataRecord>(batchSize);
+        var batchRecords = 0;
         long inserted = 0, updated = 0;
 
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
         try
         {
-            await foreach (var root in acceptedRoots.WithCancellation(cancellationToken))
-            {
-                batch.Add(root);
-                if (batch.Count >= batchSize)
-                {
-                    var counts = await WriteBatchCoreAsync(connection, transaction, context.Manifest, batch, cancellationToken);
-                    inserted += counts.Inserted;
-                    updated += counts.Updated;
-                    LogBatch(context, batch.Count);
-                    batch.Clear();
-                }
-            }
-
-            if (batch.Count > 0)
+            async Task FlushAsync()
             {
                 var counts = await WriteBatchCoreAsync(connection, transaction, context.Manifest, batch, cancellationToken);
                 inserted += counts.Inserted;
                 updated += counts.Updated;
                 LogBatch(context, batch.Count);
+                batch.Clear();
+                batchRecords = 0;
+            }
+
+            await foreach (var root in acceptedRoots.WithCancellation(cancellationToken))
+            {
+                batch.Add(root);
+                batchRecords += root.SelfAndDescendants().Count();
+                if (batch.Count >= batchSize || batchRecords >= maxRecords)
+                {
+                    await FlushAsync();
+                }
+            }
+
+            if (batch.Count > 0)
+            {
+                await FlushAsync();
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -129,6 +137,10 @@ public sealed class SqlServerImportWriter(
 
         return new WriteResult(inserted, updated);
     }
+
+    private (int BatchSize, int MaxRecords) BatchLimits() => (
+        Math.Max(1, options.Value.WriterBatchSize),
+        Math.Max(1, options.Value.WriterBatchMaxRecords));
 
     private void LogBatch(ImportContext context, int rootCount) =>
         logger.LogDebug(
@@ -291,7 +303,13 @@ public sealed class SqlServerImportWriter(
             conditions.AddRange(entity.NaturalKey.Select(k =>
             {
                 var col = SqlIdentifier.Quote(k);
-                return $"(t.{col} = s.{col} OR (t.{col} IS NULL AND s.{col} IS NULL))";
+                var keyField = entity.Fields.FirstOrDefault(f =>
+                    string.Equals(f.ColumnName, k, StringComparison.OrdinalIgnoreCase));
+                // Null-safe comparison only where NULL can occur: the OR form defeats
+                // index seeks, which dominates merge cost on large tables.
+                return keyField?.Required == true
+                    ? $"t.{col} = s.{col}"
+                    : $"(t.{col} = s.{col} OR (t.{col} IS NULL AND s.{col} IS NULL))";
             }));
 
             onClause = string.Join(" AND ", conditions);
