@@ -38,12 +38,16 @@ public sealed class SqlServerImportWriter(
         // Entities without a natural key insert unconditionally, so a retried job would
         // duplicate whatever earlier batches already committed. For those datasets the
         // whole job runs in one transaction — nothing is left behind for a retry to
-        // duplicate. Keyed datasets keep the cheaper transaction-per-batch: their merges
-        // are idempotent on re-import.
-        var singleTransaction = context.Manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0);
-        return singleTransaction
-            ? await WriteJobScopedAsync(context, acceptedRoots, cancellationToken)
-            : await WriteBatchScopedAsync(context, acceptedRoots, cancellationToken);
+        // duplicate.
+        var anyEntityLacksNaturalKey = context.Manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0);
+        if (anyEntityLacksNaturalKey)
+        {
+            return await WriteJobScopedAsync(context, acceptedRoots, cancellationToken);
+        }
+
+        // Every entity has a natural key, so merges are idempotent on re-import and the
+        // cheaper transaction-per-batch is safe.
+        return await WriteBatchScopedAsync(context, acceptedRoots, cancellationToken);
     }
 
     /// <summary>
