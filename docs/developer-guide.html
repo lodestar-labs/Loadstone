@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loadstone — Developer &amp; Maintainer Guide</title>
+<style>
+  :root {
+    --ink:#1f2933; --muted:#52606d; --line:#dbe2ea; --accent:#1d4ed8; --accent-soft:#eff6ff;
+    --panel:#f8fafc; --good:#047857; --good-soft:#ecfdf5; --warn:#b45309; --warn-soft:#fffbeb;
+    --bad:#b91c1c; --bad-soft:#fef2f2; --code-bg:#0f172a; --code-ink:#e2e8f0;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,sans-serif; color:var(--ink); line-height:1.65; background:#fff; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+
+  .layout { display:grid; grid-template-columns:280px 1fr; align-items:start; }
+  @media (max-width:1000px) { .layout { grid-template-columns:1fr; } nav.toc { position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); } }
+
+  nav.toc {
+    position:sticky; top:0; height:100vh; overflow-y:auto; padding:26px 20px 40px;
+    border-right:1px solid var(--line); background:var(--panel); font-size:0.88rem;
+  }
+  nav.toc h2 { font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:20px 0 8px; }
+  nav.toc h2:first-child { margin-top:0; }
+  nav.toc a { display:block; color:var(--muted); padding:3px 0; }
+  nav.toc a:hover { color:var(--accent); text-decoration:none; }
+  nav.toc .brand { font-weight:700; font-size:1.1rem; color:var(--ink); margin-bottom:2px; }
+  nav.toc .brand-sub { color:var(--muted); font-size:0.8rem; margin-bottom:8px; }
+
+  main { padding:44px 52px 90px; max-width:920px; overflow-x:hidden; }
+  @media (max-width:1000px) { main { padding:32px 24px 60px; } }
+
+  h1 { font-size:2rem; letter-spacing:-0.02em; margin:0 0 4px; }
+  .subtitle { color:var(--muted); font-size:1.05rem; margin:0 0 28px; }
+  h2.section { font-size:1.5rem; letter-spacing:-0.01em; margin:52px 0 12px; padding-bottom:8px; border-bottom:2px solid var(--line); }
+  h3 { font-size:1.15rem; margin:30px 0 8px; }
+  h4 { font-size:1rem; margin:22px 0 6px; color:#334155; }
+  p { margin:10px 0; }
+
+  code { font-family:Consolas,"Cascadia Code",monospace; font-size:0.88em; background:#eef2f7; padding:1px 5px; border-radius:4px; color:#0f2954; }
+  pre { background:var(--code-bg); color:var(--code-ink); padding:16px 18px; border-radius:8px; overflow-x:auto; font-size:0.82rem; line-height:1.5; margin:14px 0; }
+  pre code { background:none; padding:0; color:inherit; font-size:inherit; }
+  .filename { font-family:Consolas,monospace; font-size:0.78rem; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-bottom:none; border-radius:6px 6px 0 0; padding:5px 12px; display:inline-block; margin-bottom:-14px; position:relative; z-index:1; }
+  .filename + pre { border-top-left-radius:0; }
+
+  table { border-collapse:collapse; width:100%; margin:16px 0; font-size:0.9rem; }
+  th,td { border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); font-weight:600; }
+  td code { white-space:nowrap; }
+
+  .note { border-left:4px solid var(--accent); background:var(--accent-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .warn { border-left:4px solid var(--warn); background:var(--warn-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .gotcha { border-left:4px solid var(--bad); background:var(--bad-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .note strong, .warn strong, .gotcha strong { display:block; margin-bottom:2px; }
+
+  .figure { margin:22px 0; padding:18px; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
+  .figure svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+  .figure figcaption { font-size:0.82rem; color:var(--muted); margin-top:10px; text-align:center; }
+
+  .lbl { font:600 12.5px "Segoe UI",system-ui,sans-serif; fill:#1f2933; }
+  .lbl-sm { font:400 11px "Segoe UI",system-ui,sans-serif; fill:#52606d; }
+  .lbl-w { font:600 12.5px "Segoe UI",system-ui,sans-serif; fill:#f8fafc; }
+  .lbl-mono { font:400 11px Consolas,monospace; fill:#334155; }
+
+  .pill { display:inline-block; font-size:0.72rem; font-weight:700; padding:1px 9px; border-radius:99px; background:var(--accent-soft); color:var(--accent); vertical-align:middle; }
+  .tag-file { font-family:Consolas,monospace; font-size:0.82rem; color:#0f2954; }
+  footer { margin-top:60px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:0.85rem; }
+  ul.tight li, ol.tight li { margin:4px 0; }
+  hr.soft { border:none; border-top:1px solid var(--line); margin:34px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <div class="brand">Loadstone</div>
+  <div class="brand-sub">Developer &amp; Maintainer Guide</div>
+  <h2>Orientation</h2>
+  <a href="#intro">1. What Loadstone is</a>
+  <a href="#solution">2. Solution structure</a>
+  <a href="#dataflow">3. The end-to-end data flow</a>
+  <h2>The domain model</h2>
+  <a href="#manifest">4. The manifest model</a>
+  <a href="#record">5. The record model</a>
+  <a href="#convert">6. Value conversion</a>
+  <h2>The pipeline</h2>
+  <a href="#readers">7. Source readers</a>
+  <a href="#engine">8. The import engine</a>
+  <a href="#steps">9. Pipeline steps</a>
+  <a href="#lookups">10. Lookups</a>
+  <h2>Persistence &amp; jobs</h2>
+  <a href="#queue">11. The durable queue</a>
+  <a href="#workers">12. Queue workers</a>
+  <a href="#writer">13. The SQL writer</a>
+  <a href="#schema">14. Schema management</a>
+  <h2>Host &amp; operations</h2>
+  <a href="#api">15. The API host</a>
+  <a href="#observability">16. Observability</a>
+  <a href="#config">17. Configuration</a>
+  <h2>Working on the code</h2>
+  <a href="#extend">18. Extension points</a>
+  <a href="#testing">19. Testing</a>
+  <a href="#gotchas">20. Maintainer gotchas</a>
+</nav>
+
+<main>
+  <h1>Loadstone Developer Guide</h1>
+  <p class="subtitle">How the system is built, why it is built that way, and where to change it.</p>
+
+  <p>This guide is for engineers who will maintain and extend Loadstone. It assumes you can
+  read C# but know nothing about this codebase. It explains the architecture first, then walks
+  each major component, quoting the load-bearing parts of the code and — more importantly — the
+  reasoning behind them. Read sections&nbsp;1–3 in order; the rest can be read on demand.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="intro">1. What Loadstone is</h2>
+
+  <p>Loadstone imports hierarchical, tabular data of any shape — nested XML, JSON, or curated
+  CSV — into a relational database, driven by a single declarative document per dataset called
+  a <strong>manifest</strong>. The manifest describes the entity hierarchy, field types, keys,
+  and reference-data rules; everything else (parsing, validation, staging DDL, merge SQL,
+  foreign-key wiring, queueing, error reporting) is <em>derived</em> from it. There is no
+  per-dataset code.</p>
+
+  <p>The mental model that explains almost every design decision:</p>
+  <div class="note">
+    <strong>The core contract</strong>
+    A file arrives → it becomes a durable <em>job</em> on a queue → a worker streams the file
+    through a pipeline of steps → clean records are written to the database, bad records are
+    diverted to a rejection store with full source context. Jobs are <em>at-least-once</em>:
+    the same file may be processed more than once (retry, reclaim), so every write path must be
+    safe to repeat.
+  </div>
+
+  <p>Two properties are load-bearing throughout and worth internalizing now:</p>
+  <ul class="tight">
+    <li><strong>Streaming.</strong> Records flow one subtree at a time from parser to writer.
+    Memory is bounded by a single root record's subtree, never the file. A 500&nbsp;MB file
+    imports in roughly constant memory.</li>
+    <li><strong>Fault isolation.</strong> One malformed record never aborts a good file. Bad
+    records are quarantined; the rest import. This is the single biggest behavioral difference
+    from the hand-written importers Loadstone replaces.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="solution">2. Solution structure</h2>
+
+  <p>Six projects in a strict dependency layering. The golden rule: <strong>Core has no
+  dependencies and defines the contracts; everything else implements them.</strong> New
+  integrations are new implementations of existing interfaces, never edits to Core.</p>
+
+  <table>
+    <tr><th>Project</th><th>Responsibility</th><th>Depends on</th></tr>
+    <tr><td class="tag-file">Loadstone.Core</td><td>Contracts (interfaces) and the manifest / record model. Pure domain, zero external packages beyond logging abstractions.</td><td>—</td></tr>
+    <tr><td class="tag-file">Loadstone.Readers</td><td>Streaming XML, JSON, and CSV readers. Turns bytes into <code>DataRecord</code> trees.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Loadstone.Runtime</td><td>The engine, built-in pipeline steps, lookup resolution, queue workers, DI wiring, local file store.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Loadstone.SqlServer</td><td>SQL Server provider: durable queue, job store, code lists, schema generation, the bulk staging/merge writer.</td><td>Core, Runtime</td></tr>
+    <tr><td class="tag-file">Loadstone.Api</td><td>The ASP.NET Core host: REST endpoints, the dashboard, Swagger, health checks, Serilog + OpenTelemetry.</td><td>Core, Readers, Runtime, SqlServer</td></tr>
+    <tr><td class="tag-file">Loadstone.Tests</td><td>NUnit tests for the manifest model, readers, pipeline, and SQL generation. No database required.</td><td>Core, Readers, Runtime, SqlServer</td></tr>
+  </table>
+
+  <div class="figure">
+  <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg">
+    <rect x="250" y="14" width="260" height="46" rx="8" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.4"/>
+    <text x="380" y="33" text-anchor="middle" class="lbl">Loadstone.Api</text>
+    <text x="380" y="49" text-anchor="middle" class="lbl-sm">host: endpoints · dashboard · telemetry</text>
+
+    <rect x="70" y="110" width="180" height="46" rx="8" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="160" y="129" text-anchor="middle" class="lbl">Loadstone.Readers</text>
+    <text x="160" y="145" text-anchor="middle" class="lbl-sm">xml · json · csv</text>
+
+    <rect x="290" y="110" width="180" height="46" rx="8" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="380" y="129" text-anchor="middle" class="lbl">Loadstone.Runtime</text>
+    <text x="380" y="145" text-anchor="middle" class="lbl-sm">engine · steps · workers</text>
+
+    <rect x="510" y="110" width="180" height="46" rx="8" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="600" y="129" text-anchor="middle" class="lbl">Loadstone.SqlServer</text>
+    <text x="600" y="145" text-anchor="middle" class="lbl-sm">queue · writer · schema</text>
+
+    <rect x="230" y="220" width="300" height="52" rx="8" fill="#0f172a"/>
+    <text x="380" y="242" text-anchor="middle" class="lbl-w">Loadstone.Core</text>
+    <text x="380" y="259" text-anchor="middle" class="lbl-sm" fill="#94a3b8">contracts + manifest/record model — no dependencies</text>
+
+    <g stroke="#94a3b8" stroke-width="1.3" fill="none" marker-end="url(#a)">
+      <path d="M340 60 L200 110"/><path d="M380 60 L380 110"/><path d="M420 60 L560 110"/>
+      <path d="M160 156 L330 220"/><path d="M380 156 L380 220"/><path d="M600 156 L430 220"/>
+      <path d="M600 156 C600 190 470 195 460 218"/>
+    </g>
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/></marker></defs>
+  </svg>
+  <figcaption>Figure 1 — Project layering. Arrows point from a project to what it depends on. Nothing points into Readers/Runtime/SqlServer except the host; they only know Core.</figcaption>
+  </div>
+
+  <p>There is also a top-level <span class="tag-file">Directory.Build.props</span> that sets
+  <code>net10.0</code>, <code>Nullable</code>, <code>ImplicitUsings</code>, and
+  <code>LangVersion latest</code> for every project, so individual csproj files stay minimal.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="dataflow">3. The end-to-end data flow</h2>
+
+  <p>Follow one file through the system. Every arrow below is a real handoff you can find in the code.</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker>
+    <marker id="bg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#047857"/></marker>
+    <marker id="bw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#b45309"/></marker></defs>
+
+    <rect x="16" y="20" width="150" height="48" rx="7" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.3"/>
+    <text x="91" y="40" text-anchor="middle" class="lbl">POST /imports</text>
+    <text x="91" y="56" text-anchor="middle" class="lbl-sm">upload → file store</text>
+
+    <rect x="16" y="100" width="150" height="48" rx="7" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="91" y="120" text-anchor="middle" class="lbl">Enqueue job</text>
+    <text x="91" y="136" text-anchor="middle" class="lbl-sm">loadstone.Jobs (Pending)</text>
+
+    <rect x="16" y="180" width="150" height="48" rx="7" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="91" y="200" text-anchor="middle" class="lbl">Worker claims</text>
+    <text x="91" y="216" text-anchor="middle" class="lbl-sm">atomic, Processing</text>
+
+    <rect x="250" y="180" width="150" height="48" rx="7" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="325" y="200" text-anchor="middle" class="lbl">Reader streams</text>
+    <text x="325" y="216" text-anchor="middle" class="lbl-sm">DataRecord trees</text>
+
+    <rect x="470" y="180" width="150" height="48" rx="7" fill="#fff" stroke="#94a3b8" stroke-width="1.2"/>
+    <text x="545" y="200" text-anchor="middle" class="lbl">Steps run</text>
+    <text x="545" y="216" text-anchor="middle" class="lbl-sm">validate → lookups → …</text>
+
+    <rect x="690" y="120" width="150" height="48" rx="7" fill="#ecfdf5" stroke="#047857" stroke-width="1.3"/>
+    <text x="765" y="140" text-anchor="middle" class="lbl">Writer</text>
+    <text x="765" y="156" text-anchor="middle" class="lbl-sm">bulk stage + merge</text>
+
+    <rect x="690" y="240" width="150" height="48" rx="7" fill="#fffbeb" stroke="#b45309" stroke-width="1.3"/>
+    <text x="765" y="260" text-anchor="middle" class="lbl">Rejection store</text>
+    <text x="765" y="276" text-anchor="middle" class="lbl-sm">line · field · reason</text>
+
+    <g stroke="#64748b" stroke-width="1.5" fill="none">
+      <path d="M91 68 L91 100" marker-end="url(#b)"/>
+      <path d="M91 148 L91 180" marker-end="url(#b)"/>
+      <path d="M166 204 L250 204" marker-end="url(#b)"/>
+      <path d="M400 204 L470 204" marker-end="url(#b)"/>
+    </g>
+    <path d="M620 190 C670 180 660 150 688 146" stroke="#047857" stroke-width="1.7" fill="none" marker-end="url(#bg)"/>
+    <text x="648" y="168" class="lbl-sm" fill="#047857">clean</text>
+    <path d="M620 218 C670 232 660 258 688 262" stroke="#b45309" stroke-width="1.7" fill="none" marker-end="url(#bw)"/>
+    <text x="636" y="250" class="lbl-sm" fill="#b45309">has errors</text>
+
+    <text x="325" y="316" text-anchor="middle" class="lbl-sm">All of "Reader → Steps → Writer" is one streaming pass inside ImportEngine.RunAsync — no full-file buffer.</text>
+  </svg>
+  <figcaption>Figure 2 — One file's journey. The split between clean and rejected records is the pipeline's defining behavior.</figcaption>
+  </div>
+
+  <p>In code, that journey lives in five classes you should know by name:</p>
+  <table>
+    <tr><th>Stage</th><th>Class</th><th>Project</th></tr>
+    <tr><td>Accept upload, enqueue</td><td><code>ImportEndpoints</code></td><td>Api</td></tr>
+    <tr><td>Claim &amp; drive jobs</td><td><code>QueueWorkerService</code></td><td>Runtime</td></tr>
+    <tr><td>Orchestrate one job</td><td><code>ImportEngine</code></td><td>Runtime</td></tr>
+    <tr><td>Parse file</td><td><code>XmlSourceReader</code> / <code>JsonSourceReader</code> / <code>CsvSourceReader</code></td><td>Readers</td></tr>
+    <tr><td>Write to DB</td><td><code>SqlServerImportWriter</code></td><td>SqlServer</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="manifest">4. The manifest model</h2>
+  <p class="tag-file">Loadstone.Core/Manifests/*.cs</p>
+
+  <p>The manifest is the heart of the system: a tree of <code>EntityDefinition</code>, each
+  holding <code>FieldDefinition</code>s, rooted in a <code>DatasetManifest</code>. It is plain
+  C# with JSON (de)serialization, and it is the single source of truth every downstream
+  component reads.</p>
+
+  <h3>DatasetManifest</h3>
+  <p>Top-level: a name, queue settings, source settings, and the <code>Root</code> entity. Two
+  methods matter more than the rest.</p>
+
+  <p><code>EnumerateEntities()</code> walks the tree <strong>breadth-first, parents before
+  children</strong>. This ordering is not cosmetic — the writer relies on it to merge parents
+  before the children that reference them:</p>
+  <pre><code>public IEnumerable&lt;EntityDefinition&gt; EnumerateEntities()
+{
+    var queue = new Queue&lt;EntityDefinition&gt;();
+    queue.Enqueue(Root);
+    while (queue.Count &gt; 0)
+    {
+        var entity = queue.Dequeue();
+        yield return entity;                     // parent emitted…
+        foreach (var child in entity.Children)
+            queue.Enqueue(child);                // …before its children
+    }
+}</code></pre>
+
+  <p><code>Validate()</code> returns a <em>list of every problem found</em> (never throws,
+  never stops at the first). This is deliberate: an author fixing a manifest should see all
+  errors at once. It checks structural rules (unique entity names, children have a
+  <code>parentKeyColumn</code>, natural-key columns exist) and — crucially — rules that would
+  otherwise produce broken SQL only at runtime:</p>
+  <ul class="tight">
+    <li>a field column colliding with <code>keyColumn</code> or <code>parentKeyColumn</code>
+    (those are database-generated / auto-wired);</li>
+    <li>decimal <code>precision</code>/<code>scale</code> out of SQL Server's range;</li>
+    <li><code>maxLength</code> outside 1–4000;</li>
+    <li>a string natural-key column longer than 850 chars (exceeds the index key-size limit).</li>
+  </ul>
+  <div class="note"><strong>Why validation is so defensive</strong>
+  Every rule in <code>Validate()</code> exists because a missing check once turned into a
+  cryptic <code>CREATE TABLE</code> or <code>MERGE</code> failure deep in the writer. The
+  principle: <em>catch the author's mistake at registration time, with a clear message, not at
+  import time against the database.</em></div>
+
+  <h3>EntityDefinition</h3>
+  <p>One level of the hierarchy = one relational table.</p>
+  <table>
+    <tr><th>Property</th><th>Meaning</th></tr>
+    <tr><td><code>Name</code></td><td>What readers match: XML element, JSON property, or CSV file name (case-insensitive).</td></tr>
+    <tr><td><code>Table</code>, <code>Schema</code></td><td>Target table. <code>QualifiedTable</code> returns the bracket-escaped <code>[schema].[table]</code>.</td></tr>
+    <tr><td><code>KeyColumn</code></td><td>Surrogate identity PK (database-generated; never supplied in data).</td></tr>
+    <tr><td><code>ParentKeyColumn</code></td><td>FK to the parent's key. Null on the root; required on children.</td></tr>
+    <tr><td><code>NaturalKey</code></td><td>Columns that identify a row for upsert, scoped within the parent. Empty ⇒ always insert.</td></tr>
+    <tr><td><code>Children</code></td><td>Nested entities, any depth.</td></tr>
+  </table>
+
+  <h3>FieldDefinition</h3>
+  <p>A source value and where it lands. Key fields: <code>Name</code> (source),
+  <code>Column</code> (target, defaults to Name), <code>Type</code> (a <code>FieldKind</code>
+  enum: String, Int32, Int64, Decimal, Double, Boolean, Date, DateTime, Time, Guid),
+  <code>Source</code> (Element / Attribute / Constant), plus <code>Required</code>,
+  <code>MaxLength</code>, <code>Precision</code>/<code>Scale</code>, <code>Format</code>,
+  <code>Default</code>, and an optional <code>Lookup</code>.</p>
+
+  <h3>LookupSettings</h3>
+  <p>Turns a raw code into a resolved value (see §10). Carries the list name, the provider key
+  (<code>"codelist"</code> by default), the <code>OnMissing</code> policy
+  (<code>RejectRecord</code>, <code>RejectFile</code>, <code>UseDefault</code>,
+  <code>AutoCreate</code>), and a <code>ValueKind</code> (the resolved value's type, default
+  <code>Int32</code> — this drives the target column type for lookup fields).</p>
+
+  <h3>Serialization &amp; the IDataset interface</h3>
+  <p><code>ManifestSerializer</code> centralizes the <code>JsonSerializerOptions</code>
+  (camelCase, case-insensitive, string enums, comments allowed) and <em>validates on
+  deserialize</em> — you cannot construct an invalid manifest from JSON. Datasets can also be
+  declared in code via <code>IDataset</code>, which uses a C&nbsp;11 <em>static abstract</em>
+  member so the manifest is checked at compile time:</p>
+  <pre><code>public interface IDataset
+{
+    static abstract DatasetManifest Manifest { get; }
+}</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="record">5. The record model</h2>
+  <p class="tag-file">Loadstone.Core/Records/DataRecord.cs</p>
+
+  <p><code>DataRecord</code> is the canonical in-flight shape every reader produces and the whole
+  pipeline consumes. Format-specific detail dies at the reader boundary; nothing after it knows
+  whether the source was XML, JSON, or CSV.</p>
+
+  <pre><code>public sealed class DataRecord
+{
+    public required EntityDefinition Entity { get; init; }
+    public SourceLocation Location { get; init; }         // line / path, for rejections
+    public Dictionary&lt;string, string?&gt; Raw  { get; }      // by field name — kept for reports
+    public Dictionary&lt;string, object?&gt; Values { get; }     // by target column — converted
+    public List&lt;DataRecord&gt; Children { get; }
+    public List&lt;RecordIssue&gt; Issues { get; }
+    public object? DatabaseKey { get; set; }               // filled by the writer after merge
+
+    public bool HasErrors     =&gt; Issues.Any(i =&gt; i.Severity == IssueSeverity.Error);
+    public bool TreeHasErrors =&gt; SelfAndDescendants().Any(r =&gt; r.HasErrors);
+}</code></pre>
+
+  <p>Three things to understand here:</p>
+  <ul class="tight">
+    <li><strong>Two dictionaries.</strong> <code>Raw</code> holds original source strings keyed
+    by <em>field</em> name; <code>Values</code> holds converted CLR values keyed by <em>column</em>
+    name. Readers fill <code>Raw</code>; the validate step fills <code>Values</code>. Rejection
+    reports read <code>Raw</code> so operators see exactly what was in the file.</li>
+    <li><strong><code>TreeHasErrors</code> vs <code>HasErrors</code>.</strong> The engine rejects
+    on the <em>tree</em>: if any descendant is bad, the whole root subtree is diverted. This
+    keeps a parent and its children atomic — you never write a parent whose child failed.</li>
+    <li><strong><code>DatabaseKey</code>.</strong> Mutable, set by the writer after a row is
+    merged. This is how a parent hands its generated identity down to its children as their
+    foreign key.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="convert">6. Value conversion</h2>
+  <p class="tag-file">Loadstone.Core/Records/ValueConverter.cs</p>
+
+  <p>Converts raw source strings to CLR values. The performance-critical detail: a converter
+  delegate is <strong>compiled once per <code>FieldDefinition</code> and cached</strong>, so the
+  per-row hot path is a single delegate call — no reflection, no per-row type switch.</p>
+
+  <pre><code>private static readonly ConcurrentDictionary&lt;FieldDefinition, Func&lt;string, object?&gt;&gt; Cache = new();
+
+public static bool TryConvert(FieldDefinition field, string? raw, out object? value, out string? error)
+{
+    var effective = string.IsNullOrWhiteSpace(raw) ? field.Default : raw;
+    if (string.IsNullOrWhiteSpace(effective)) { value = null; return true; }   // null/default
+    try
+    {
+        value = Cache.GetOrAdd(field, BuildConverter)(effective.Trim());
+        return true;
+    }
+    catch (Exception ex) when (ex is FormatException or OverflowException or ArgumentException)
+    {
+        value = null;
+        error = $"Value '{Truncate(effective)}' is not a valid {field.Type}.";
+        return false;                                                          // never throws to caller
+    }
+}</code></pre>
+
+  <p>Two behaviors worth remembering: parsing is always <strong>invariant-culture</strong> (so
+  <code>1.5</code> means one-and-a-half regardless of the server's locale), and
+  <code>TryConvert</code> <strong>never throws</strong> — a bad value returns
+  <code>false</code> with a message, which becomes a record rejection rather than an exception.
+  Decimals use <code>NumberStyles.Float</code> so JSON exponent notation (<code>1.5e3</code>)
+  parses.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="readers">7. Source readers</h2>
+  <p class="tag-file">Loadstone.Readers/*</p>
+
+  <p>All three implement one interface, and the contract's key clause is <em>stream</em>:</p>
+  <pre><code>public interface ISourceReader
+{
+    string Format { get; }                       // "xml" | "json" | "csv"
+    IReadOnlyList&lt;string&gt; Extensions { get; }     // for format inference from file name
+    IAsyncEnumerable&lt;DataRecord&gt; ReadAsync(Stream stream, DatasetManifest manifest, CancellationToken ct);
+}</code></pre>
+
+  <h3>XmlSourceReader — a streaming state machine</h3>
+  <p>Uses a forward-only <code>XmlReader</code> and materializes <strong>one root-entity subtree
+  at a time</strong>. It matches the root entity's element name anywhere in the document (or,
+  if <code>source.xml.rootElement</code> is set, only inside that wrapper element). Elements
+  matching a child entity recurse; elements matching a field become raw values; everything else
+  is skipped — so a partner adding extra elements never breaks your import. Line numbers are
+  captured via <code>IXmlLineInfo</code> for rejection reports.</p>
+  <div class="warn"><strong>Editing the XML reader safely</strong>
+  It is a hand-written state machine over a char/element stream. The invariant that keeps it
+  correct: <em>every branch of the inner loop must advance the reader, and after reading an
+  entity subtree the outer loop must not skip the node the sub-read stopped on</em> (that's the
+  <code>readNext = false</code> dance). A malformed field element (nested markup where text was
+  expected) is caught and turned into a <code>SourceFormatException</code>, not left to bubble.</div>
+
+  <h3>JsonSourceReader</h3>
+  <p>A top-level array is streamed element-by-element via
+  <code>JsonSerializer.DeserializeAsyncEnumerable</code> — bounded memory at any size. A
+  top-level <em>object</em> that wraps the array (via <code>source.json.rootProperty</code> or a
+  property named after the root entity) is also supported, but that path parses the whole
+  document.</p>
+  <div class="warn"><strong>Known trade-off</strong>
+  The wrapped-object path is <em>not</em> streaming. It is documented in the class summary and
+  the manifest reference. Very large exports should use a top-level array. If you ever need
+  streaming for wrapped objects, that's a <code>Utf8JsonReader</code> rewrite — non-trivial.</div>
+
+  <h3>CsvSourceReader</h3>
+  <p>Two shapes. A dataset whose root has <em>no children</em> imports from a single CSV file. A
+  <em>hierarchical</em> dataset imports from a zip archive with one <code>EntityName.csv</code>
+  per entity, where each row has a <code>_key</code> and child rows carry a
+  <code>_parentKey</code> that links them to their parent. The linking happens in memory after
+  reading; duplicate or missing keys reject the affected record with a diagnostic. The
+  underlying <code>CsvParser</code> is a dependency-free RFC&nbsp;4180 state machine (quoted
+  fields, escaped quotes, embedded newlines) that survives 8&nbsp;KB buffer refills — all its
+  state lives outside the read loop, which is the property to preserve if you touch it.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="engine">8. The import engine</h2>
+  <p class="tag-file">Loadstone.Runtime/ImportEngine.cs</p>
+
+  <p><code>ImportEngine.RunAsync</code> orchestrates one job as a single streaming pass. This is
+  the class to read first if you want to understand how the pieces connect. Its shape:</p>
+  <pre><code>// 1. Resolve the reader for the job's format and the ordered steps for this manifest.
+var reader = readers.First(r =&gt; r.Format == job.Format);
+var orderedSteps = steps.Where(s =&gt; s.AppliesTo(manifest)).OrderBy(s =&gt; s.Order).ToArray();
+
+// 2. Open the file and hand a *lazy* stream of accepted roots to the writer.
+await using var stream = await fileStore.OpenReadAsync(job.FileReference, ct);
+var accepted = ProcessAsync(reader, stream, context, orderedSteps, pendingRejections, ct);
+writeResult = await writer.WriteAsync(context, accepted, ct);   // writer pulls records through</code></pre>
+
+  <p>The engine does not build a list and pass it on. <code>ProcessAsync</code> is an
+  <code>async</code> iterator; the writer <em>pulls</em> records through it. Each root that comes
+  out of the reader is run through every step, then:</p>
+  <pre><code>foreach (var step in orderedSteps)
+    await step.ExecuteAsync(context, root, ct);
+
+if (root.TreeHasErrors)
+{
+    context.AddRecordsRejected(treeSize);
+    CollectRejections(job.Id, root, pendingRejections);   // → rejection store
+    continue;                                             // NOT yielded to the writer
+}
+yield return root;                                        // clean → flows to the writer</code></pre>
+
+  <p>So "validate → resolve → split → write" is not four passes over the data; it is one pass
+  where each record is fully processed and then either yielded or diverted. Rejections are
+  flushed to the store in batches. On a retry (attempt&nbsp;&gt;&nbsp;1) the engine first clears
+  the previous attempt's rejections so reports reflect the latest run.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="steps">9. Pipeline steps</h2>
+  <p class="tag-file">Loadstone.Runtime/Steps/*</p>
+
+  <p>A step is a pluggable stage applied to every root record between parsing and writing.</p>
+  <pre><code>public interface IImportStep
+{
+    string Name { get; }
+    int Order =&gt; 500;                                       // built-ins: Validate=100, Lookups=200
+    bool AppliesTo(DatasetManifest manifest) =&gt; true;
+    ValueTask ExecuteAsync(ImportContext context, DataRecord root, CancellationToken ct);
+}</code></pre>
+
+  <p>Steps run in ascending <code>Order</code>. They mark problems via
+  <code>record.AddError(...)</code>; a record whose subtree accumulates an error is diverted to
+  the rejection store instead of the database. Two are built in:</p>
+
+  <h4>ValidateStep (Order 100)</h4>
+  <p>Converts raw strings to typed values (filling <code>record.Values</code>), applies defaults
+  and constants, and enforces required fields, max lengths, and required child entities. It
+  never throws — every failure is an <code>AddError</code>. Lookup fields are skipped here
+  except for a presence check; their conversion is the lookup step's job.</p>
+
+  <h4>LookupStep (Order 200)</h4>
+  <p>Resolves every lookup field through the <code>ILookupResolver</code> and applies the
+  outcome: write the resolved value, reject the record, or (for <code>RejectFile</code>) throw
+  <code>LookupRejectedFileException</code> to abort the whole import. <code>AppliesTo</code>
+  returns false when the manifest has no lookups, so datasets without reference data skip it
+  entirely.</p>
+
+  <div class="note"><strong>Adding your own step</strong>
+  Implement <code>IImportStep</code>, pick an <code>Order</code> (＞200 runs after the
+  built-ins, before the writer), and register it: <code>builder.AddStep&lt;MyStep&gt;()</code>.
+  Use it to enrich values, apply cross-field rules, or veto records. See §18.</div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="lookups">10. Lookups</h2>
+  <p class="tag-file">Loadstone.Core/Lookups/* · Loadstone.Runtime/Lookups/* · Loadstone.SqlServer/CodeList*, SqlQueryLookupProvider</p>
+
+  <p>Lookups turn a raw code (<code>"DK"</code>) into a stored value (an id). The design
+  separates <em>what a value means</em> (a provider) from <em>policy and caching</em> (the
+  resolver).</p>
+
+  <h4>ILookupProvider — the pluggable part</h4>
+  <pre><code>public interface ILookupProvider
+{
+    string Key { get; }                                     // manifests reference this
+    ValueTask&lt;LookupResult&gt; ResolveAsync(string list, string value, bool caseInsensitive, CancellationToken ct);
+    ValueTask&lt;object?&gt; CreateAsync(string list, string value, CancellationToken ct)   // for AutoCreate; optional
+        =&gt; throw new NotSupportedException(...);
+}</code></pre>
+  <p>Two ship in the box: <code>CodeListLookupProvider</code> (key <code>"codelist"</code>,
+  backed by <code>loadstone.CodeLists</code>/<code>Codes</code>, supports auto-create) and
+  <code>SqlQueryLookupProvider</code> — a <em>configuration-defined</em> provider where you give
+  it a key, a SQL query taking <code>@List</code>/<code>@Value</code>, and optionally a separate
+  connection string. That's how an existing company lookup database plugs in with zero code
+  (see the "company X" section of the architecture doc).</p>
+
+  <h4>CachingLookupResolver — policy &amp; caching</h4>
+  <p>Routes a field to its provider by key, caches hits in <code>IMemoryCache</code>, and applies
+  the <code>OnMissing</code> policy to a miss. The provider only answers "what does this mean?";
+  everything else — cache keys, case handling, the four missing-value policies — lives here, so
+  a new provider stays tiny.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="queue">11. The durable queue</h2>
+  <p class="tag-file">Loadstone.SqlServer/SqlImportJobQueue.cs · SystemSchema.cs</p>
+
+  <p>The queue is a single SQL table, <code>loadstone.Jobs</code>. No broker, no extra infra —
+  which is exactly why it works on App Service and on-prem out of the box. The job lifecycle is
+  the most safety-critical code in the system, so understand it before touching it.</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 820 210" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"/></marker></defs>
+    <rect x="20" y="80" width="120" height="44" rx="20" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/>
+    <text x="80" y="106" text-anchor="middle" class="lbl">Pending</text>
+    <rect x="220" y="80" width="120" height="44" rx="20" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.3"/>
+    <text x="280" y="106" text-anchor="middle" class="lbl">Processing</text>
+    <rect x="430" y="20" width="150" height="44" rx="20" fill="#ecfdf5" stroke="#047857" stroke-width="1.3"/>
+    <text x="505" y="46" text-anchor="middle" class="lbl">Succeeded</text>
+    <rect x="430" y="80" width="150" height="44" rx="20" fill="#fffbeb" stroke="#b45309" stroke-width="1.3"/>
+    <text x="505" y="100" text-anchor="middle" class="lbl-sm">CompletedWith-</text>
+    <text x="505" y="114" text-anchor="middle" class="lbl-sm">Rejections</text>
+    <rect x="430" y="140" width="150" height="44" rx="20" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.2"/>
+    <text x="505" y="166" text-anchor="middle" class="lbl">Failed</text>
+    <rect x="650" y="140" width="150" height="44" rx="20" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.4"/>
+    <text x="725" y="166" text-anchor="middle" class="lbl">DeadLettered</text>
+
+    <g stroke="#64748b" stroke-width="1.4" fill="none">
+      <path d="M140 102 L218 102" marker-end="url(#c)"/>
+      <path d="M340 96 L428 52" marker-end="url(#c)"/>
+      <path d="M340 102 L428 102" marker-end="url(#c)"/>
+      <path d="M340 108 L428 158" marker-end="url(#c)"/>
+      <path d="M505 140 C505 132 300 130 282 126" marker-end="url(#c)"/>
+      <path d="M580 162 L648 162" marker-end="url(#c)"/>
+    </g>
+    <text x="180" y="94" text-anchor="middle" class="lbl-sm">claim</text>
+    <text x="400" y="132" text-anchor="middle" class="lbl-sm">retry (backoff)</text>
+    <text x="614" y="156" text-anchor="middle" class="lbl-sm">attempts spent</text>
+  </svg>
+  <figcaption>Figure 3 — Job states. Failed re-enters Pending with exponential backoff until attempts are exhausted, then dead-letters.</figcaption>
+  </div>
+
+  <h4>Claiming — atomic, multi-worker safe</h4>
+  <p>Any number of workers, across processes and machines, poll the same table. The claim is a
+  single statement that can never hand one job to two workers:</p>
+  <pre><code>WITH next AS (
+    SELECT TOP (1) * FROM loadstone.Jobs WITH (ROWLOCK, UPDLOCK, READPAST)
+    WHERE QueueName = @Queue AND Status IN ('Pending','Failed')
+      AND (NextAttemptAt IS NULL OR NextAttemptAt &lt;= SYSDATETIMEOFFSET())
+    ORDER BY CreatedAt)
+UPDATE next SET Status='Processing', StartedAt=SYSDATETIMEOFFSET(),
+    HeartbeatAt=SYSDATETIMEOFFSET(), Attempt=Attempt+1
+OUTPUT inserted.*;</code></pre>
+  <p><code>READPAST</code> skips rows another worker has locked; <code>UPDLOCK</code> holds the
+  claim; <code>OUTPUT</code> returns the claimed row. One indivisible operation.</p>
+
+  <h4>Fencing — the subtle part</h4>
+  <div class="gotcha"><strong>Do not remove the attempt fence</strong>
+  <code>CompleteAsync</code> and <code>FailAsync</code> update
+  <code>WHERE Id=@Id AND Status='Processing' AND Attempt=@Attempt</code>. This matters because a
+  slow worker's job can be <em>reclaimed</em> (below) and re-run by another worker. Without the
+  fence, the stale worker finishing late would clobber the new attempt's result. The fence makes
+  its update a no-op (logged as a warning). Removing it reintroduces silent data races under
+  retries.</div>
+
+  <h4>Heartbeats &amp; reclaim — telling slow apart from dead</h4>
+  <p>A worker pulses <code>HeartbeatAsync</code> every 60&nbsp;s while processing.
+  <code>ReclaimAbandonedAsync</code> requeues jobs whose
+  <code>COALESCE(HeartbeatAt, StartedAt)</code> is older than the abandoned-job timeout (default
+  30&nbsp;min). Using the heartbeat, not <code>StartedAt</code>, is what lets a legitimately
+  long import run for hours without being stolen and double-processed. On graceful shutdown a
+  worker calls <code>ReleaseAsync</code>, which hands the job straight back to <code>Pending</code>
+  without consuming an attempt — so deploys don't strand jobs for the reclaim window.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="workers">12. Queue workers</h2>
+  <p class="tag-file">Loadstone.Runtime/Workers/QueueWorkerService.cs · LoadstoneInitializer.cs</p>
+
+  <p><code>QueueWorkerService</code> is a <code>BackgroundService</code> that hosts one polling
+  loop per queue slot. It periodically scans the dataset registry and starts loops for any queue
+  it isn't already serving (respecting each dataset's <code>concurrency</code>). Each loop claims
+  a job, opens a fresh DI scope, resolves an <code>ImportEngine</code>, runs it, and records the
+  terminal state.</p>
+  <div class="gotcha"><strong>The bug that was here — don't reintroduce it</strong>
+  The loops are stored in a <code>ConcurrentDictionary</code>. An earlier version passed the
+  running task <em>into</em> <code>TryAdd</code> as an argument, which starts it before the
+  duplicate check — spawning a new infinite loop on every scan. Always check membership
+  <em>then</em> start the loop. This is called out in a comment at the call site.</div>
+  <p>A separate <code>ImportEngine</code> is resolved per job from a scoped container, so nothing
+  scoped is shared across threads. <code>LoadstoneInitializer</code> (an
+  <code>IHostedService</code>) runs at startup: it ensures the system tables exist (retrying
+  while the database warms up) and loads persisted manifests into the registry.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="writer">13. The SQL writer</h2>
+  <p class="tag-file">Loadstone.SqlServer/SqlServerImportWriter.cs · DataRecordReader.cs</p>
+
+  <p>The writer is where correctness and performance meet. It never touches rows one at a time;
+  it stages in bulk and applies set-based SQL. It picks one of three strategies from the
+  manifest's shape, automatically — the caller never chooses.</p>
+
+  <h4>Strategy selection</h4>
+  <pre><code>// Flat dataset (root has no children): stream straight into a staging table + one MERGE.
+if (context.Manifest.Root.Children.Count == 0)
+    return await WriteFlatStreamedAsync(...);
+
+// Hierarchical + some entity has no natural key ⇒ its inserts aren't idempotent,
+// so a retry could duplicate. Run the whole job in ONE transaction.
+var anyEntityLacksNaturalKey = context.Manifest.EnumerateEntities().Any(e =&gt; e.NaturalKey.Count == 0);
+if (anyEntityLacksNaturalKey)
+    return await WriteJobScopedAsync(...);
+
+// Every entity has a natural key ⇒ merges are idempotent, partial commits are safe.
+// Cheaper transaction-per-batch.
+return await WriteBatchScopedAsync(...);</code></pre>
+  <p>The unifying principle: <strong>each strategy is the fastest one that is still safe to
+  repeat for that shape</strong>, because the queue is at-least-once. Flat = one atomic
+  statement; keyless hierarchy = one job transaction; keyed hierarchy = idempotent per-batch
+  merges.</p>
+
+  <h4>Hierarchical merge — how children get their foreign keys</h4>
+  <p>For a batch, records are flattened per entity (parents first, via
+  <code>EnumerateEntities</code>). For each entity the writer: creates a
+  <code>#stage</code> temp table, bulk-copies the rows into it (with a <code>_StageId</code> and,
+  for children, the parent's already-known <code>_ParentKey</code>), then runs a
+  <code>MERGE</code> whose <code>OUTPUT</code> captures each row's database key against its
+  stage id:</p>
+  <pre><code>MERGE [dbo].[OrderLines] WITH (HOLDLOCK) AS t
+USING #stage AS s ON t.[OrderId] = s._ParentKey AND t.[LineNumber] = s.[LineNumber]
+WHEN MATCHED THEN UPDATE SET ...
+WHEN NOT MATCHED THEN INSERT (...) VALUES (...)
+OUTPUT $action, inserted.[LineId], s._StageId INTO #out (...);</code></pre>
+  <p>The writer reads <code>#out</code>, sets each record's <code>DatabaseKey</code>, and those
+  keys become the <code>_ParentKey</code> values staged for the next level down. That's the
+  entire foreign-key mechanism — no ORM, no per-row round trips, works at any depth.</p>
+  <div class="note"><strong>Performance detail worth knowing</strong>
+  For <em>required</em> natural-key columns the ON clause uses plain <code>t.c = s.c</code>; only
+  <em>nullable</em> keys get the null-safe <code>(t.c = s.c OR both IS NULL)</code> form, which
+  defeats index seeks. This one change was a ~9–15× speedup on large keyed tables. Batches flush
+  at 500 roots <em>or</em> 50,000 total records, so a deep hierarchy (thousands of records per
+  root) stays memory-bounded.</div>
+
+  <h4>Flat fast path — the accelerator</h4>
+  <p><code>WriteFlatStreamedAsync</code> handles single-entity datasets (the big commercial-file
+  case). Records stream from the parser through <code>DataRecordReader</code> — a custom
+  <code>DbDataReader</code> — <em>directly</em> into <code>SqlBulkCopy</code>, filling one
+  staging table for the whole file with no intermediate buffering, then a single MERGE (or
+  <code>INSERT..SELECT</code> for keyless data) applies it. Constant memory at any size, and the
+  single atomic statement makes it perfectly retry-safe. Measured ~30,000 records/s on a laptop
+  against a 1M-row, 527&nbsp;MB file.</p>
+
+  <div class="warn"><strong>SQL identifiers</strong>
+  Every table/column name that reaches SQL goes through <code>SqlIdentifier.Quote</code> (bracket
+  wrap + <code>]</code> doubling) or <code>EntityDefinition.QualifiedTable</code> (same
+  escaping). If you emit new SQL that embeds a manifest-supplied name, use those helpers — never
+  interpolate a raw name. Values are always parameterized.</div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="schema">14. Schema management</h2>
+  <p class="tag-file">Loadstone.SqlServer/SqlServerSchemaManager.cs · SystemSchema.cs</p>
+
+  <p><code>ISchemaManager</code> does two jobs. <code>EnsureSystemObjectsAsync</code> creates
+  Loadstone's own tables (<code>loadstone.Jobs</code>, <code>JobEvents</code>,
+  <code>RejectedRows</code>, <code>CodeLists</code>, <code>Codes</code>) idempotently — each
+  statement in <code>SystemSchema.Statements</code> is guarded with <code>IF OBJECT_ID … IS
+  NULL</code> or <code>IF COL_LENGTH … IS NULL</code>, so it doubles as a lightweight migration
+  runner (that's how the <code>HeartbeatAt</code> column is added to existing databases). It also
+  creates the target database itself if the login can, by catching SQL error 4060 and issuing
+  <code>CREATE DATABASE</code> against <code>master</code>.</p>
+  <p><code>GenerateTargetSchemaScript</code> derives <code>CREATE TABLE</code> DDL for a dataset
+  from its manifest: identity key, parent FK, typed columns, and a unique index over the natural
+  key (scoped by the parent key). Exposed at <code>GET /api/datasets/{name}/schema</code> and
+  applied by <code>ApplyTargetSchemaAsync</code>. Pre-existing tables work too — the manifest
+  just maps onto them and schema generation is optional.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="api">15. The API host</h2>
+  <p class="tag-file">Loadstone.Api/*</p>
+
+  <p>A minimal-API ASP.NET Core app. <code>Program.cs</code> wires Serilog, OpenTelemetry, the
+  upload size cap, Swagger, the static dashboard (served from <code>wwwroot</code> at
+  <code>/</code>), health checks, and — the important line —
+  <code>AddLoadstone().UseSqlServer().AddSourceReader&lt;…&gt;()</code>, plus binding any
+  configured SQL lookups. Endpoints are grouped:</p>
+  <table>
+    <tr><th>File</th><th>Routes</th></tr>
+    <tr><td class="tag-file">DatasetEndpoints</td><td>List/get/put/delete datasets; get &amp; apply generated schema. PUT persists to the manifest store <em>before</em> updating the in-memory registry, so disk and memory never diverge.</td></tr>
+    <tr><td class="tag-file">ImportEndpoints</td><td>Upload &amp; enqueue (<code>POST /api/datasets/{name}/imports</code>); job status, events, rejections.</td></tr>
+    <tr><td class="tag-file">CodeListEndpoints</td><td>Browse and upsert code lists.</td></tr>
+  </table>
+  <p>The dashboard (<code>wwwroot/index.html</code>) is dependency-free vanilla JS that calls
+  these endpoints. Every API-sourced string is HTML-escaped before insertion — keep it that way
+  if you extend it.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="observability">16. Observability</h2>
+  <p class="tag-file">Loadstone.Runtime/Diagnostics/LoadstoneDiagnostics.cs</p>
+
+  <p>One class owns the telemetry names. It exposes an <code>ActivitySource</code> and
+  <code>Meter</code> both named <code>"Loadstone"</code>, plus counters (records read / rejected,
+  rows written) and a job-duration histogram. Wire them into any OpenTelemetry pipeline with
+  <code>AddSource("Loadstone")</code> / <code>AddMeter("Loadstone")</code>; the host already does,
+  and setting <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> exports both signals to any collector.
+  Every job carries a <code>CorrelationId</code> that flows into log scopes, the trace, and the
+  job-events timeline, so a single import is traceable end to end. Structured job history lives
+  in <code>loadstone.JobEvents</code>; row-level failures in <code>loadstone.RejectedRows</code>,
+  both queryable over HTTP.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="config">17. Configuration</h2>
+  <p class="tag-file">Loadstone.Runtime/LoadstoneOptions.cs</p>
+
+  <p>All runtime behavior is bound from the <code>Loadstone</code> configuration section.</p>
+  <table>
+    <tr><th>Option</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>ConnectionString</code></td><td>—</td><td>Target DB + system tables (also read from <code>ConnectionStrings:Loadstone</code>).</td></tr>
+    <tr><td><code>ManifestDirectory</code></td><td><code>data/datasets</code></td><td>Where registered manifests persist as JSON.</td></tr>
+    <tr><td><code>FileStorePath</code></td><td><code>data/imports</code></td><td>Uploaded files until processed.</td></tr>
+    <tr><td><code>AutoCreateTargetTables</code></td><td><code>false</code></td><td>Create target tables from the manifest on registration.</td></tr>
+    <tr><td><code>MaxUploadBytes</code></td><td>4&nbsp;GB</td><td>Finite upload ceiling (the endpoint is unauthenticated).</td></tr>
+    <tr><td><code>WriterBatchSize</code> / <code>WriterBatchMaxRecords</code></td><td>500 / 50,000</td><td>Batch flush thresholds (roots / total records).</td></tr>
+    <tr><td><code>QueuePollInterval</code></td><td>2&nbsp;s</td><td>Idle worker poll cadence.</td></tr>
+    <tr><td><code>RetryBaseDelay</code></td><td>30&nbsp;s</td><td>Base for exponential retry backoff.</td></tr>
+    <tr><td><code>AbandonedJobTimeout</code></td><td>30&nbsp;min</td><td>Heartbeat age before a job is reclaimed.</td></tr>
+    <tr><td><code>LookupCacheDuration</code></td><td>5&nbsp;min</td><td>In-memory lookup cache TTL.</td></tr>
+    <tr><td><code>DeleteFilesAfterImport</code></td><td><code>false</code></td><td>Remove the upload after a successful import.</td></tr>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="extend">18. Extension points</h2>
+  <p class="tag-file">Loadstone.Runtime/LoadstoneBuilder.cs</p>
+
+  <p>Everything extensible is an interface registered through the builder returned by
+  <code>AddLoadstone()</code>. You should never need to edit Core to add a capability.</p>
+  <pre><code>builder.Services.AddLoadstone(o =&gt; { /* options */ })
+    .UseSqlServer()                              // database provider
+    .AddSourceReader&lt;XmlSourceReader&gt;()           // a file format
+    .AddSourceReader&lt;JsonSourceReader&gt;()
+    .AddSourceReader&lt;CsvSourceReader&gt;()
+    .AddStep&lt;GeocodeStep&gt;()                       // a custom pipeline step
+    .AddLookupProvider&lt;CrmCustomerLookup&gt;()       // a custom reference-data source
+    .AddSqlLookup("res-codes", sqlQuery, connStr)// a config-defined SQL lookup
+    .AddDataset&lt;OrdersDataset&gt;();                 // a compile-time dataset</code></pre>
+  <table>
+    <tr><th>To add…</th><th>Implement</th><th>Register</th></tr>
+    <tr><td>A new file format</td><td><code>ISourceReader</code></td><td><code>AddSourceReader&lt;T&gt;()</code></td></tr>
+    <tr><td>A processing stage</td><td><code>IImportStep</code></td><td><code>AddStep&lt;T&gt;()</code></td></tr>
+    <tr><td>A reference-data source</td><td><code>ILookupProvider</code></td><td><code>AddLookupProvider&lt;T&gt;()</code> or <code>AddSqlLookup(...)</code></td></tr>
+    <tr><td>A different database</td><td><code>IImportWriter</code>, <code>IImportJobQueue</code>, <code>IImportJobStore</code>, <code>ISchemaManager</code></td><td>a new <code>UseXxx()</code> extension</td></tr>
+    <tr><td>Different file storage</td><td><code>IFileStore</code></td><td><code>UseFileStore&lt;T&gt;()</code></td></tr>
+  </table>
+  <div class="note"><strong>Worked example: a PostgreSQL provider</strong>
+  Implement the four SqlServer-side interfaces against Npgsql — the queue as a table with
+  <code>SELECT … FOR UPDATE SKIP LOCKED</code>, the writer with <code>COPY</code> +
+  <code>INSERT … ON CONFLICT</code>. The pipeline, readers, steps, manifest model, and API do not
+  change at all. That isolation is the whole point of the layering.</div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="testing">19. Testing</h2>
+  <p class="tag-file">Loadstone.Tests/* · scripts/smoke-test.ps1</p>
+
+  <p>Two tiers. <strong>Unit tests</strong> (NUnit, ~80, no database) cover the manifest model
+  and validation, the value converter, all three readers (including the CSV parser's edge
+  cases), the pipeline steps and lookup policies, the engine end-to-end with fakes, and — by
+  asserting on the generated SQL strings — the merge/DDL generation. Run with
+  <code>dotnet test</code>; CI runs them with warnings-as-errors.</p>
+  <p><strong>End-to-end</strong>: <code>scripts/smoke-test.ps1</code> drives a running instance
+  through all three formats, an idempotent re-import, and a bad-row file, asserting status,
+  counts, and rejection detail. Point it at any instance:
+  <code>.\scripts\smoke-test.ps1 -BaseUrl http://localhost:8080</code>. It needs a real database
+  (LocalDB, a container, or Azure SQL) — the layer that inspection alone cannot verify.</p>
+  <div class="warn"><strong>SQL generation is tested by string assertion</strong>
+  The generated MERGE/DDL is verified by asserting on the produced SQL text, not by executing it.
+  That catches structural regressions cheaply but not engine-level behavior — always run the
+  smoke test against a real database after changing the writer or schema manager.</div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="gotchas">20. Maintainer gotchas</h2>
+  <p>The short list of things that will bite you if you don't know them:</p>
+  <ul class="tight">
+    <li><strong>Entity names are globally unique per dataset.</strong> A segment that appears
+    under two different parents (as RDBES's <code>BV</code> does under both SA and FM) can't be
+    modeled directly yet. Per-parent entity naming is a known roadmap item.</li>
+    <li><strong>The queue is at-least-once.</strong> Any new write path must be safe to repeat.
+    If you add one, decide its idempotency story explicitly (see the three writer strategies).</li>
+    <li><strong>Don't loosen the attempt fence</strong> on <code>CompleteAsync</code>/
+    <code>FailAsync</code>, and don't reclaim on <code>StartedAt</code> instead of the heartbeat —
+    both reintroduce double-processing.</li>
+    <li><strong>Readers must stream.</strong> The one documented exception is wrapped-object
+    JSON. Don't add more <code>ToList()</code>-over-the-file shortcuts.</li>
+    <li><strong>Validate at registration, not at runtime.</strong> If a manifest mistake can
+    produce broken SQL, add a rule to <code>DatasetManifest.Validate()</code> with a clear
+    message rather than letting it fail against the database.</li>
+    <li><strong>All SQL identifiers from manifests go through the quoting helpers;</strong> all
+    values are parameterized. No exceptions.</li>
+    <li><strong>The Core project stays dependency-free.</strong> If a change wants to add a
+    package to Core, it almost certainly belongs in a provider instead.</li>
+  </ul>
+
+  <footer>
+    Loadstone developer guide · pairs with <a href="architecture-overview.html">architecture-overview.html</a>
+    (design rationale) and <a href="manifest-reference.html">manifest-reference.html</a> (the full
+    manifest spec). Source of truth is always the code; when this guide and the code disagree, fix
+    the guide.
+  </footer>
+</main>
+</div>
+</body>
+</html>

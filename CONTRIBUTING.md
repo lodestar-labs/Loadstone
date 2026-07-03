@@ -11,6 +11,14 @@ new database providers.
 3. For end-to-end testing against a real database, `docker compose up` gives you SQL
    Server plus a running instance with the sample dataset.
 
+## Understanding the codebase
+
+Start with [docs/developer-guide.html](docs/developer-guide.html) — a component-by-component
+walkthrough of the architecture and the key parts of each major class, written for people new
+to the project. Pair it with [docs/architecture-overview.html](docs/architecture-overview.html)
+for design rationale and [docs/manifest-reference.md](docs/manifest-reference.md) for the
+manifest spec.
+
 ## Making changes
 
 - Open an issue first for anything beyond a small fix, so we can agree on the approach
