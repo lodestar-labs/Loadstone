@@ -202,6 +202,16 @@ abstractions, and configuration is standard `IConfiguration` (environment variab
 Vault, App Configuration all work as-is). Swapping the file store for Blob Storage or the
 queue for Service Bus later is implementing one small interface, not a rewrite.
 
+## Validating before import
+
+Loadstone pairs naturally with [Rowvane Gate](https://github.com/KadjiProjects/RowvaneGate),
+the declarative file-validation engine: Gate bounces whole bad files with a forensic
+report *before* they consume an import job; Loadstone quarantines the row-level
+stragglers its lookups and conversions catch during import. The
+[validate &amp; import guide](docs/validate-and-import-guide.md) covers all three modes —
+validation alone, import alone, or both chained into one pipeline — including how to
+keep a Gate ruleset and a Loadstone manifest in sync for the same feed.
+
 ## Project layout
 
 | Project | What it is |
