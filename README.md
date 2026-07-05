@@ -8,7 +8,7 @@ spreadsheet-driven team. You describe a dataset once, in a small JSON manifest â
 hierarchy, types, keys, and reference-data rules â€” and Loadstone turns any of those formats
 into clean relational rows: validated, upserted, fully observable, and never silently lost.
 
-[![CI](https://github.com/KadjiProjects/Loadstone/actions/workflows/ci.yml/badge.svg)](https://github.com/KadjiProjects/Loadstone/actions/workflows/ci.yml)
+[![CI](https://github.com/lodestar-labs/Loadstone/actions/workflows/ci.yml/badge.svg)](https://github.com/lodestar-labs/Loadstone/actions/workflows/ci.yml)
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
@@ -54,7 +54,7 @@ Loadstone is that program, written once, properly:
 The fastest route is Docker (SQL Server included):
 
 ```bash
-git clone https://github.com/KadjiProjects/Loadstone.git
+git clone https://github.com/lodestar-labs/Loadstone.git
 cd Loadstone
 docker compose up --build
 ```
@@ -232,7 +232,7 @@ hierarchical data.
 
 ## Validating before import
 
-Loadstone pairs naturally with [Rowvane Gate](https://github.com/KadjiProjects/RowvaneGate),
+Loadstone pairs naturally with [Rowvane Gate](https://github.com/lodestar-labs/RowvaneGate),
 the declarative file-validation engine: Gate bounces whole bad files with a forensic
 report *before* they consume an import job; Loadstone quarantines the row-level
 stragglers its lookups and conversions catch during import. The
