@@ -29,6 +29,7 @@ Property names are camelCase and case-insensitive. Enum values are camelCase str
 | --- | --- | --- | --- |
 | `name` | string | dataset name | Set the same name on several datasets to share one queue. |
 | `maxAttempts` | int | `3` | Attempts before a job dead-letters. |
+| `retryBaseDelaySeconds` | int | `30` | Base delay for this dataset's exponential retry backoff (delay = base × 2^attempt). Overrides the global `Loadstone:RetryBaseDelay`. |
 | `concurrency` | int | `1` | Parallel jobs processed from this queue. |
 
 ### `source`
@@ -41,6 +42,8 @@ Property names are camelCase and case-insensitive. Enum values are camelCase str
 | `csv.hasHeaderRow` | bool | `true` | First row is a header. Without it, columns map positionally to fields. |
 | `csv.keyColumn` | string | `_key` | Row key column in hierarchical (zip) uploads. |
 | `csv.parentKeyColumn` | string | `_parentKey` | Parent reference column in child files. |
+| `csv.encoding` | string | `utf-8` | Text encoding by IANA name (`windows-1252`, `iso-8859-1`, ...). A byte-order mark always wins. Excel on Windows commonly saves CSV as windows-1252 — set this or `æ ø å` arrive as mojibake. |
+| `csv.allowRaggedRows` | bool | `false` | Accept rows whose field count differs from the header. Off by default: ragged rows usually mean shifted or corrupted data, so they are rejected row-by-row instead of imported silently. |
 
 ## Entities
 

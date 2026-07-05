@@ -189,7 +189,22 @@
   }
 
   function api(path, options) {
+    options = options || {};
+    var apiKey = localStorage.getItem("loadstone-api-key");
+    if (apiKey) {
+      options.headers = Object.assign({}, options.headers, { "X-Api-Key": apiKey });
+    }
     return fetch(path, options).then(function (response) {
+      if (response.status === 401) {
+        // The host requires an API key (Loadstone:ApiKey). Ask once, remember, retry.
+        var entered = prompt("This Loadstone host requires an API key:");
+        if (entered) {
+          localStorage.setItem("loadstone-api-key", entered);
+          return api(path, options);
+        }
+        localStorage.removeItem("loadstone-api-key");
+        throw new Error("An API key is required.");
+      }
       if (!response.ok) {
         return response.text().then(function (body) {
           var message = "HTTP " + response.status;

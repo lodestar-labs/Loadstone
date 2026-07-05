@@ -46,4 +46,12 @@ public sealed class LoadstoneOptions
     /// import files.
     /// </summary>
     public long MaxUploadBytes { get; set; } = 4L * 1024 * 1024 * 1024;
+
+    /// <summary>
+    /// When set, every /api request must carry this value in the X-Api-Key header. Leave
+    /// null only when the host sits behind an authenticating gateway — the API can register
+    /// datasets and (with AutoCreateTargetTables) execute DDL, so it must not face an
+    /// untrusted network unprotected.
+    /// </summary>
+    public string? ApiKey { get; set; }
 }

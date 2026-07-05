@@ -179,7 +179,10 @@ builder.Services.AddLoadstone().AddDataset<OrdersDataset>();
   Monitor, Grafana, Jaeger, Datadog, take your pick.
 - **The API itself** — `/api/imports` for job state and counts, `/{id}/events` for the
   stage timeline, `/{id}/rejections` for row-level failures with source locations, and
-  `/health` for probes.
+  health endpoints: `/health/live` (process up — wire your liveness probe here; it never
+  depends on the database, so a DB blip can't restart your replicas) and `/health/ready`
+  (database reachable — wire readiness here to gate traffic). Plain `/health` remains as
+  the combined view.
 - **The dashboard** — a zero-dependency operations UI at `/`: live job table, per-job
   timeline and rejection browser, dataset manifests and generated schema, and code-list
   management.
@@ -196,11 +199,36 @@ is exactly the shape Azure App Service wants:
    `%HOME%\data` share, and enable *Always On* so queue workers keep polling.
 4. Optional: set `OTEL_EXPORTER_OTLP_ENDPOINT` to light up Application Insights via the
    Azure Monitor OTLP ingestion.
+5. Optional: set `Loadstone__ApiKey` to require an `X-Api-Key` header on every `/api`
+   request (the dashboard prompts for it once). Without a key, run Loadstone only behind
+   an authenticating gateway — the API registers datasets and can execute DDL.
 
 No code changes — the queue is SQL-backed, file storage and manifests are directory-based
 abstractions, and configuration is standard `IConfiguration` (environment variables, Key
 Vault, App Configuration all work as-is). Swapping the file store for Blob Storage or the
 queue for Service Bus later is implementing one small interface, not a rewrite.
+
+**Scaling out.** Any number of replicas can share the queue safely — jobs are claimed
+with SQL row locks and can never run twice concurrently. The one thing replicas must
+share is storage: `FileStorePath` and `ManifestDirectory` have to point at the *same*
+volume on every instance (App Service's `%HOME%\data` share or a Kubernetes RWX volume),
+because any replica may claim a job whose file another replica accepted. Two replicas
+with node-local disks will fail imports with `FileNotFoundException`.
+
+**Delivery semantics, honestly.** The queue is at-least-once. For datasets where every
+entity has a `naturalKey`, imports are effectively exactly-once — the merge is idempotent,
+so a retried or duplicated attempt converges to the same rows. Datasets with entities
+that have *no* natural key insert unconditionally; those run in one job-scoped
+transaction so a *failed* attempt leaves nothing behind, but the rare crash *between*
+commit and job completion means a retry can insert the data twice. If duplicates would
+hurt, give the entity a natural key. Also size `Loadstone__AbandonedJobTimeout`
+(default 30 min) above your longest expected import.
+
+**Memory, honestly.** Flat datasets, XML, and top-level JSON arrays stream end to end —
+multi-gigabyte files import with bounded memory. Two paths buffer the whole dataset:
+hierarchical zip-of-CSVs archives and JSON wrapped in a root object property. Keep those
+feeds within available memory, or use XML / top-level JSON arrays for very large
+hierarchical data.
 
 ## Validating before import
 

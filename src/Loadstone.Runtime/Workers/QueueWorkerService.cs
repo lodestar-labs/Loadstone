@@ -153,7 +153,10 @@ public sealed class QueueWorkerService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Import job {JobId} attempt {Attempt} failed", job.Id, job.Attempt);
-            await queue.FailAsync(job, ex.Message, CancellationToken.None);
+            var retryBaseDelay = registry.Find(job.Dataset) is { } manifest
+                ? TimeSpan.FromSeconds(Math.Max(1, manifest.Queue.RetryBaseDelaySeconds))
+                : (TimeSpan?)null;
+            await queue.FailAsync(job, ex.Message, retryBaseDelay, CancellationToken.None);
             outcomeTag = job.Status == ImportJobStatus.DeadLettered ? "DeadLettered" : "Failed";
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
         }

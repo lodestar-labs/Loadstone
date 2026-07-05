@@ -107,17 +107,17 @@ public sealed class SqlServerImportWriter(
             }
 
             await using var command = new SqlCommand(
-                $"SELECT _Action, COUNT(*) FROM {outName} GROUP BY _Action;", connection);
+                $"SELECT _Action, COUNT_BIG(*) FROM {outName} GROUP BY _Action;", connection);
             await using var counts = await command.ExecuteReaderAsync(cancellationToken);
             while (await counts.ReadAsync(cancellationToken))
             {
                 if (counts.GetString(0) == "INSERT")
                 {
-                    inserted = counts.GetInt32(1);
+                    inserted = counts.GetInt64(1);
                 }
                 else
                 {
-                    updated = counts.GetInt32(1);
+                    updated = counts.GetInt64(1);
                 }
             }
         }

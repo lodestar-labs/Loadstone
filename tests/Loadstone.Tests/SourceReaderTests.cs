@@ -248,6 +248,84 @@ public class CsvSourceReaderTests
         Assert.That(records.Where(r => !r.TreeHasErrors), Has.Exactly(1).Items);
     }
 
+    [Test]
+    public async Task Windows1252_files_decode_when_encoding_is_configured()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children.Clear();
+        manifest.Source.Csv.Encoding = "windows-1252";
+
+        // "Bæk" in windows-1252: æ = 0xE6, no BOM. Decoded as UTF-8 this byte is invalid.
+        var bytes = new List<byte>();
+        bytes.AddRange(Encoding.ASCII.GetBytes("OrderNumber,Total\nB"));
+        bytes.Add(0xE6);
+        bytes.AddRange(Encoding.ASCII.GetBytes("k,1\n"));
+
+        var reader = new CsvSourceReader();
+        var records = new List<DataRecord>();
+        await foreach (var record in reader.ReadAsync(new MemoryStream([.. bytes]), manifest))
+        {
+            records.Add(record);
+        }
+
+        Assert.That(records.Single().Raw["OrderNumber"], Is.EqualTo("Bæk"));
+    }
+
+    [Test]
+    public void Unknown_encoding_name_is_reported_clearly()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children.Clear();
+        manifest.Source.Csv.Encoding = "not-a-real-encoding";
+
+        var reader = new CsvSourceReader();
+        var ex = Assert.ThrowsAsync<SourceFormatException>(async () =>
+        {
+            await foreach (var _ in reader.ReadAsync(TestData.AsStream("OrderNumber\nA-1\n"), manifest))
+            {
+            }
+        });
+        Assert.That(ex!.Message, Does.Contain("not-a-real-encoding"));
+    }
+
+    [Test]
+    public async Task Ragged_rows_are_rejected_by_default()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children.Clear();
+
+        var reader = new CsvSourceReader();
+        var records = new List<DataRecord>();
+        await foreach (var record in reader.ReadAsync(
+            TestData.AsStream("OrderNumber,Total\nA-1,10.5\nA-2,3,unexpected-extra\n"), manifest))
+        {
+            records.Add(record);
+        }
+
+        Assert.That(records, Has.Count.EqualTo(2));
+        Assert.That(records[0].TreeHasErrors, Is.False);
+        Assert.That(records[1].TreeHasErrors, Is.True);
+    }
+
+    [Test]
+    public async Task Ragged_rows_import_when_explicitly_allowed()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children.Clear();
+        manifest.Source.Csv.AllowRaggedRows = true;
+
+        var reader = new CsvSourceReader();
+        var records = new List<DataRecord>();
+        await foreach (var record in reader.ReadAsync(
+            TestData.AsStream("OrderNumber,Total\nA-1\nA-2,3,extra\n"), manifest))
+        {
+            records.Add(record);
+        }
+
+        Assert.That(records, Has.Count.EqualTo(2));
+        Assert.That(records.All(r => !r.TreeHasErrors), Is.True);
+    }
+
     private static void AddEntry(ZipArchive archive, string name, string content)
     {
         var entry = archive.CreateEntry(name);

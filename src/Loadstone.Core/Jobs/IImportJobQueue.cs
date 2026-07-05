@@ -36,10 +36,15 @@ public interface IImportJobQueue
 
     /// <summary>
     /// Records a failed attempt: schedules a retry with exponential backoff, or dead-letters
-    /// the job when attempts are exhausted.
+    /// the job when attempts are exhausted. <paramref name="retryBaseDelay"/> overrides the
+    /// globally configured backoff base (datasets set it via queue.retryBaseDelaySeconds).
     /// </summary>
-    Task FailAsync(ImportJob job, string error, CancellationToken cancellationToken = default);
+    Task FailAsync(ImportJob job, string error, TimeSpan? retryBaseDelay = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Requeues jobs stuck in Processing longer than <paramref name="olderThan"/> (crashed workers).</summary>
+    /// <summary>
+    /// Recovers jobs stuck in Processing longer than <paramref name="olderThan"/> (crashed
+    /// workers): jobs with attempts left are requeued; exhausted ones are dead-lettered so a
+    /// job that repeatedly kills its worker cannot crash-loop forever.
+    /// </summary>
     Task<int> ReclaimAbandonedAsync(TimeSpan olderThan, CancellationToken cancellationToken = default);
 }

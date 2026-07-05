@@ -235,4 +235,17 @@ public sealed class CsvSourceSettings
     public string KeyColumn { get; set; } = "_key";
 
     public string ParentKeyColumn { get; set; } = "_parentKey";
+
+    /// <summary>
+    /// Text encoding of the file (an IANA name such as "utf-8", "windows-1252", or
+    /// "iso-8859-1"). A byte-order mark always wins when present. Defaults to UTF-8.
+    /// </summary>
+    public string Encoding { get; set; } = "utf-8";
+
+    /// <summary>
+    /// Accept rows whose field count differs from the header. Off by default: a ragged row
+    /// usually means a shifted or corrupted line, and importing it silently would store
+    /// wrong data — so it is rejected with a row-level error instead.
+    /// </summary>
+    public bool AllowRaggedRows { get; set; }
 }

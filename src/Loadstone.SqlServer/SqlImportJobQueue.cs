@@ -113,7 +113,7 @@ public sealed class SqlImportJobQueue(
         }
     }
 
-    public async Task FailAsync(ImportJob job, string error, CancellationToken cancellationToken = default)
+    public async Task FailAsync(ImportJob job, string error, TimeSpan? retryBaseDelay = null, CancellationToken cancellationToken = default)
     {
         var exhausted = job.Attempt >= job.MaxAttempts;
         if (exhausted)
@@ -124,8 +124,9 @@ public sealed class SqlImportJobQueue(
         }
         else
         {
+            var baseDelay = retryBaseDelay ?? options.Value.RetryBaseDelay;
             var backoff = TimeSpan.FromSeconds(
-                options.Value.RetryBaseDelay.TotalSeconds * Math.Pow(2, Math.Max(0, job.Attempt - 1)));
+                baseDelay.TotalSeconds * Math.Pow(2, Math.Max(0, job.Attempt - 1)));
             job.Status = ImportJobStatus.Failed;
             job.NextAttemptAt = DateTimeOffset.UtcNow.Add(backoff);
         }
@@ -174,11 +175,24 @@ public sealed class SqlImportJobQueue(
 
     public async Task<int> ReclaimAbandonedAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
     {
+        // Exhausted jobs dead-letter instead of requeueing: a file that repeatedly kills its
+        // worker (OOM, native crash) never reaches FailAsync, so without this guard it would
+        // be reclaimed and retried forever.
         const string sql = """
+            UPDATE loadstone.Jobs
+            SET Status = N'DeadLettered',
+                Error = N'Abandoned by a crashed worker with no attempts left.',
+                CompletedAt = SYSDATETIMEOFFSET(),
+                NextAttemptAt = NULL
+            WHERE Status = N'Processing'
+              AND COALESCE(HeartbeatAt, StartedAt) < DATEADD(SECOND, -@Seconds, SYSDATETIMEOFFSET())
+              AND Attempt >= MaxAttempts;
+
             UPDATE loadstone.Jobs
             SET Status = N'Pending', NextAttemptAt = NULL
             WHERE Status = N'Processing'
-              AND COALESCE(HeartbeatAt, StartedAt) < DATEADD(SECOND, -@Seconds, SYSDATETIMEOFFSET());
+              AND COALESCE(HeartbeatAt, StartedAt) < DATEADD(SECOND, -@Seconds, SYSDATETIMEOFFSET())
+              AND Attempt < MaxAttempts;
             """;
 
         await using var connection = await connectionFactory.OpenAsync(cancellationToken);
