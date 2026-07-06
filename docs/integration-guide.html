@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loadstone — integration guide: the API and the job lifecycle</title>
+<style>
+  :root {
+    --ink: #1a2332; --muted: #5a6a7e; --accent: #0f4c81; --accent-soft: #e8f0f8;
+    --good: #1a7f4e; --bad: #b3382c; --warn: #9a6700;
+    --code-bg: #f6f8fa; --border: #d7dee8; --card: #ffffff; --page: #f2f5f9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--page); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+  header.hero { background: linear-gradient(135deg, #0f4c81 0%, #1a2332 100%); color: #fff; padding: 56px 24px 48px; }
+  .hero-inner { max-width: 960px; margin: 0 auto; }
+  .hero h1 { font-size: 2rem; font-weight: 700; letter-spacing: -.5px; }
+  .hero .sub { margin-top: 10px; font-size: 1.12rem; color: #c8d8ea; max-width: 50em; }
+  .hero .tag { display: inline-block; margin-bottom: 18px; padding: 4px 12px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: #cfe0f0; }
+  h2 { font-size: 1.5rem; color: var(--accent); margin: 52px 0 14px; padding-bottom: 6px; border-bottom: 2px solid var(--border); letter-spacing: -.3px; }
+  h3 { font-size: 1.1rem; margin: 26px 0 8px; color: var(--ink); }
+  p { margin: 10px 0; }
+  p.lead { font-size: 1.08rem; color: var(--muted); }
+  a { color: var(--accent); }
+  ul, ol { margin: 10px 0 10px 26px; }
+  li { margin: 4px 0; }
+  code { font-family: 'Cascadia Code', Consolas, monospace; font-size: .88em; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+  pre { background: #10161f; color: #d5dde8; border-radius: 10px; padding: 18px 20px; overflow-x: auto; margin: 14px 0; font-size: .84rem; line-height: 1.55; }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  pre .cm { color: #7a8a9d; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: var(--card); border-radius: 8px; overflow: hidden; font-size: .92rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-soft); color: var(--accent); font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .method { font-weight: 700; font-family: Consolas, monospace; font-size: .85rem; }
+  .method.get { color: var(--good); } .method.post { color: var(--accent); } .method.put { color: var(--warn); } .method.del { color: var(--bad); }
+  .status { font-weight: 700; font-family: Consolas, monospace; font-size: .85rem; }
+  .status.ok { color: var(--good); } .status.warn { color: var(--warn); } .status.bad { color: var(--bad); }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 16px 0; }
+  .callout.warn { border-color: var(--warn); background: #fbf3e0; }
+  nav.toc { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin: 28px 0; }
+  nav.toc .panel-title { font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  nav.toc ol { counter-reset: toc; list-style: none; margin: 0; }
+  nav.toc li { counter-increment: toc; margin: 6px 0; }
+  nav.toc li::before { content: counter(toc) ". "; color: var(--accent); font-weight: 700; }
+  .foot { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: .88rem; }
+  .overflow { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <span class="tag">Loadstone · Integration guide</span>
+    <h1>Calling Loadstone from your system</h1>
+    <p class="sub">The complete HTTP surface, the asynchronous job lifecycle, authentication, and
+    the patterns for uploading a file and reliably knowing what happened to it.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc">
+  <div class="panel-title">On this page</div>
+  <ol>
+    <li>The model in one minute</li>
+    <li>Authentication</li>
+    <li>Uploading a file</li>
+    <li>The job lifecycle — what the statuses mean</li>
+    <li>Following a job to completion</li>
+    <li>The full endpoint reference</li>
+    <li>Integration patterns</li>
+  </ol>
+</nav>
+
+<h2 id="model">1. The model in one minute</h2>
+<p class="lead">Imports are asynchronous. You never wait on an upload — you get a job id and ask
+about it.</p>
+<p>A <strong>dataset</strong> (declared once, in a JSON manifest) describes the shape of the data
+and its target tables. Uploading a file to a dataset creates an <strong>import job</strong> on a
+persistent queue; a worker picks it up, streams the file through validation → lookups → the
+database writer, and records the outcome plus a per-row rejection log. Your integration therefore
+has exactly two moving parts: <em>submit</em> (one POST) and <em>observe</em> (poll the job until
+it reaches a terminal status).</p>
+
+<h2 id="auth">2. Authentication</h2>
+<p>Out of the box the API is open (suitable for a private network). Setting one configuration
+value locks every <code>/api</code> route behind a shared key:</p>
+<pre><code><span class="cm"># environment variable form</span>
+Loadstone__ApiKey=your-long-random-secret</code></pre>
+<p>From then on, every request must carry the header — a missing or wrong key gets
+<code>401 { "error": "Missing or invalid X-Api-Key header." }</code>:</p>
+<pre><code>curl -H "X-Api-Key: your-long-random-secret" http://localhost:8080/api/datasets</code></pre>
+<p>The comparison is constant-time server-side. The dashboard prompts for the key once and
+remembers it in the browser. Health probes (<code>/health/live</code>,
+<code>/health/ready</code>) stay open by design — orchestrators need them before they could know
+any secret.</p>
+
+<h2 id="upload">3. Uploading a file</h2>
+<pre><code>curl -H "X-Api-Key: $KEY" \
+     -F "file=@orders-2026-07.xml" \
+     "http://localhost:8080/api/datasets/orders/imports?requestedBy=nightly-feed"</code></pre>
+<p>The response is <code>202 Accepted</code> — the file is stored and queued, nothing has been
+imported yet:</p>
+<pre><code>{
+  "jobId": "0e1f9a3c-…",
+  "correlationId": "…",
+  "queue": "orders",
+  "status": "Pending"
+}</code></pre>
+<p>Details worth knowing:</p>
+<ul>
+  <li><strong>Format</strong> is inferred from the file extension (<code>.xml</code>,
+  <code>.json</code>, <code>.csv</code>, <code>.zip</code>); pass <code>?format=…</code>
+  explicitly when the extension is missing or misleading. A dataset may restrict which formats it
+  accepts — violations are a <code>400</code> naming the allowed list.</li>
+  <li><strong><code>requestedBy</code></strong> is a free-text caller tag stored on the job —
+  invaluable when several systems feed the same dataset.</li>
+  <li>The <code>Location</code> header points at the job resource:
+  <code>/api/imports/{jobId}</code>.</li>
+  <li>A <code>404</code> means the dataset isn't registered; a <code>400</code> names the exact
+  problem (unknown format, no reader, format not accepted).</li>
+</ul>
+
+<h2 id="lifecycle">4. The job lifecycle — what the statuses mean</h2>
+<div class="overflow">
+<table>
+  <tr><th>Status</th><th>Terminal?</th><th>Meaning</th><th>Your reaction</th></tr>
+  <tr><td><span class="status">Pending</span></td><td>no</td><td>Queued, not yet picked up.</td><td>Keep polling.</td></tr>
+  <tr><td><span class="status">Processing</span></td><td>no</td><td>A worker is streaming the file.</td><td>Keep polling.</td></tr>
+  <tr><td><span class="status ok">Succeeded</span></td><td>yes</td><td>Every record imported.</td><td>Done.</td></tr>
+  <tr><td><span class="status warn">CompletedWithRejections</span></td><td>yes</td><td>Accepted records were written; some rows were rejected (validation, lookups). <strong>This is a success status for the file and a to-do list for the data.</strong></td><td>Fetch <code>/rejections</code>, route them to whoever owns the source data.</td></tr>
+  <tr><td><span class="status bad">Failed</span></td><td>no</td><td>An attempt failed (infrastructure, database). It <em>will be retried</em> automatically until attempts are exhausted.</td><td>Keep polling — do not resubmit; that would double-import on recovery.</td></tr>
+  <tr><td><span class="status bad">DeadLettered</span></td><td>yes</td><td>All attempts exhausted; requires an operator.</td><td>Alert. Inspect <code>/events</code> for the failure trail; resubmit only after the cause is fixed.</td></tr>
+</table>
+</div>
+<div class="callout warn"><strong>The distinction that matters most:</strong>
+<code>CompletedWithRejections</code> and <code>Failed</code> are opposites, not neighbors.
+The first means "the import finished; these specific rows need fixing." The second means "nothing
+is final yet; the system is still trying." Automation that treats them alike either re-sends
+files that already landed or ignores rows that silently went missing.</div>
+
+<h2 id="follow">5. Following a job to completion</h2>
+<pre><code><span class="cm"># poll until terminal</span>
+GET /api/imports/{jobId}          <span class="cm">→ { id, dataset, status, attempt, … }</span>
+
+<span class="cm"># when CompletedWithRejections: what was rejected, and why</span>
+GET /api/imports/{jobId}/rejections?top=1000
+<span class="cm">→ row-by-row: the record path, field, message, and the raw offending value</span>
+
+<span class="cm"># the full audit trail (attempts, errors, timings)</span>
+GET /api/imports/{jobId}/events</code></pre>
+<p>A robust polling loop in any language:</p>
+<pre><code><span class="cm">// C# sketch — the shape matters more than the language</span>
+while (true)
+{
+    var job = await http.GetFromJsonAsync&lt;JobView&gt;($"/api/imports/{jobId}");
+    switch (job.Status)
+    {
+        case "Succeeded":                 return Outcome.Clean;
+        case "CompletedWithRejections":   return await CollectRejections(jobId);
+        case "DeadLettered":              return Outcome.NeedsOperator;
+        // Pending, Processing, Failed → still in flight (Failed retries automatically)
+    }
+    await Task.Delay(TimeSpan.FromSeconds(5));   // 2–10s is a sensible cadence
+}</code></pre>
+<p>Poll every few seconds for interactive flows, every 30–60&nbsp;s for nightly feeds. There are
+no completion webhooks yet (they're on the roadmap) — polling is the supported mechanism, and the
+job store is indexed for it.</p>
+
+<h2 id="reference">6. The full endpoint reference</h2>
+<p>Everything below requires the <code>X-Api-Key</code> header when a key is configured.
+Interactive documentation for the same surface: Swagger UI at <code>/swagger</code>.</p>
+
+<h3>Imports</h3>
+<div class="overflow">
+<table>
+  <tr><th>Endpoint</th><th>Purpose</th><th>Notes</th></tr>
+  <tr><td><span class="method post">POST</span> <code>/api/datasets/{name}/imports</code></td>
+      <td>Upload a file (multipart <code>file=@…</code>), enqueue an import job.</td>
+      <td><code>202</code> + <code>jobId</code>; optional <code>?format=</code>, <code>?requestedBy=</code>.</td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/imports/{id}</code></td>
+      <td>One job: dataset, file, status, attempt, counts, timestamps.</td>
+      <td><code>404</code> unknown id.</td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/imports?dataset=&amp;status=&amp;top=</code></td>
+      <td>List jobs, newest first; all filters optional.</td>
+      <td>Default <code>top</code> is 100.</td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/imports/{id}/events</code></td>
+      <td>The job's audit trail: enqueued, attempts, errors, completion.</td>
+      <td></td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/imports/{id}/rejections?top=</code></td>
+      <td>Row-level rejections with field, message, and raw value.</td>
+      <td>Default <code>top</code> is 1000.</td></tr>
+</table>
+</div>
+
+<h3>Datasets</h3>
+<div class="overflow">
+<table>
+  <tr><th>Endpoint</th><th>Purpose</th><th>Notes</th></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/datasets</code></td><td>List registered datasets.</td><td></td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/datasets/{name}</code></td><td>One manifest, as registered.</td><td><code>404</code> unknown.</td></tr>
+  <tr><td><span class="method put">PUT</span> <code>/api/datasets/{name}</code></td><td>Register or replace a manifest (JSON body).</td><td>Validated first; a manifest that fails validation changes nothing.</td></tr>
+  <tr><td><span class="method del">DEL</span> <code>/api/datasets/{name}</code></td><td>Unregister a dataset.</td><td></td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/datasets/{name}/schema</code></td><td>The DDL Loadstone would run for this manifest — review before applying.</td><td></td></tr>
+  <tr><td><span class="method post">POST</span> <code>/api/datasets/{name}/schema/apply</code></td><td>Create the target tables/indexes (guarded, rerun-safe).</td><td></td></tr>
+</table>
+</div>
+
+<h3>Code lists (reference data for lookups)</h3>
+<div class="overflow">
+<table>
+  <tr><th>Endpoint</th><th>Purpose</th></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/codelists</code></td><td>List code lists and entry counts.</td></tr>
+  <tr><td><span class="method get">GET</span> <code>/api/codelists/{list}</code></td><td>All entries of one list.</td></tr>
+  <tr><td><span class="method put">PUT</span> <code>/api/codelists/{list}</code></td><td>Replace a list's entries (JSON body).</td></tr>
+</table>
+</div>
+
+<h2 id="patterns">7. Integration patterns</h2>
+
+<h3>7.1 A service submits and awaits</h3>
+<p>The bread-and-butter integration: your backend receives or produces a file, POSTs it, persists
+the returned <code>jobId</code> next to its own record, and a background poller drives the state
+machine from section 5. Persisting the <code>jobId</code> is the important habit — it makes the
+import resumable across your own restarts and idempotent to operator questions ("did file X
+land?").</p>
+
+<h3>7.2 Scheduled batch feeds</h3>
+<p>A nightly job uploads whatever appeared in a drop folder, then polls each job to terminal
+state and writes a summary (imported / rejected / dead-lettered) to its own log or alerting
+channel. Everything is one <code>curl</code> + one polling loop; <code>requestedBy</code> tags
+the run for traceability.</p>
+
+<h3>7.3 Validate first, then import (with Rowvane Gate)</h3>
+<p>When the sender should get feedback <em>before</em> anything touches the database, put
+<a href="https://github.com/lodestar-labs/RowvaneGate">Rowvane Gate</a> in front: validate the
+file against a ruleset, only forward it to Loadstone when the report is clean. The complete
+recipe — including running both services side by side — is the
+<a href="validate-and-import-guide.md">validate &amp; import guide</a>.</p>
+
+<h3>7.4 Receiving exports from Fathom</h3>
+<p>Hierarchical CSV produced by <a href="https://github.com/lodestar-labs/Fathom">Fathom</a> (a
+zip of <code>{Entity}.csv</code> files with <code>_key</code>/<code>_parentKey</code> columns) is
+exactly the shape Loadstone's hierarchical CSV import reads — database-to-database transfer is a
+Fathom export POSTed straight to a Loadstone dataset.</p>
+
+<div class="foot">
+Loadstone · <a href="index.html">documentation home</a> ·
+<a href="https://github.com/lodestar-labs/Loadstone">github.com/lodestar-labs/Loadstone</a>
+</div>
+
+</div>
+</body>
+</html>
