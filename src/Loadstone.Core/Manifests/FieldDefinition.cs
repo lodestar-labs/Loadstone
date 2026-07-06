@@ -29,6 +29,14 @@ public enum FieldSource
 
 public sealed class FieldDefinition
 {
+    /// <summary>
+    /// Column length given to a string field with no explicit <see cref="MaxLength"/> when it
+    /// must be indexable (natural-key membership). Validation and DDL must agree on this
+    /// number: a value that fits validation but not the column aborts the whole import at
+    /// merge time instead of rejecting one row.
+    /// </summary>
+    public const int IndexableStringDefaultLength = 400;
+
     /// <summary>Source name: XML element/attribute, JSON property, or CSV header.</summary>
     public required string Name { get; set; }
 

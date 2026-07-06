@@ -67,10 +67,35 @@ public sealed class ValidateStep : IImportStep
                 continue;
             }
 
-            if (value is string text && field.MaxLength is { } maxLength && text.Length > maxLength)
+            // Length limit: the explicit maxLength, or — for natural-key strings, which get a
+            // fixed-length indexable column — the same default the DDL uses. Without this, a
+            // long key value passes validation and aborts the whole import at merge time.
+            var effectiveMaxLength = field.MaxLength
+                ?? (IsNaturalKeyMember(entity, field) ? FieldDefinition.IndexableStringDefaultLength : (int?)null);
+            if (value is string text && effectiveMaxLength is { } maxLength && text.Length > maxLength)
             {
                 record.AddError(field.Name, $"Value is {text.Length} characters; the maximum is {maxLength}.", raw);
                 continue;
+            }
+
+            // The target column is decimal(Precision,Scale); a value whose integer part needs
+            // more digits than Precision-Scale would raise arithmetic overflow during bulk
+            // copy and abort the whole import instead of rejecting this one row.
+            if (value is decimal number)
+            {
+                var integerPart = decimal.Truncate(Math.Abs(number));
+                var integerDigits = integerPart == 0m
+                    ? 0
+                    : integerPart.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+                var allowedIntegerDigits = field.Precision - field.Scale;
+                if (integerDigits > allowedIntegerDigits)
+                {
+                    record.AddError(
+                        field.Name,
+                        $"Value has {integerDigits} integer digits; decimal({field.Precision},{field.Scale}) allows at most {allowedIntegerDigits}.",
+                        raw);
+                    continue;
+                }
             }
 
             record.Values[field.ColumnName] = value;
@@ -84,4 +109,7 @@ public sealed class ValidateStep : IImportStep
             }
         }
     }
+
+    private static bool IsNaturalKeyMember(EntityDefinition entity, FieldDefinition field) =>
+        entity.NaturalKey.Any(k => string.Equals(k, field.ColumnName, StringComparison.OrdinalIgnoreCase));
 }

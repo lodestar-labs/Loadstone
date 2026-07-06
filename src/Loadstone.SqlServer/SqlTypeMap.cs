@@ -60,6 +60,6 @@ internal static class SqlTypeMap
 
     private static string StringLength(FieldDefinition field, bool indexable) =>
         field.MaxLength is { } max ? max.ToString()
-        : indexable ? "400"
+        : indexable ? FieldDefinition.IndexableStringDefaultLength.ToString()
         : "max";
 }

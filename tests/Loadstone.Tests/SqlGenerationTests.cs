@@ -1,3 +1,4 @@
+using Loadstone.Manifests;
 using Loadstone.SqlServer;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -121,5 +122,35 @@ public class SchemaScriptTests
     public void Required_fields_are_not_nullable()
     {
         Assert.That(Script(), Does.Contain("[OrderNumber] nvarchar(20) NOT NULL"));
+    }
+}
+
+[TestFixture]
+public class WriterTransactionScopeTests
+{
+    [Test]
+    public void Natural_keyed_dataset_without_reject_file_lookups_takes_batch_scope()
+    {
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(TestData.Orders()), Is.False);
+    }
+
+    [Test]
+    public void Entity_without_natural_key_forces_the_job_transaction()
+    {
+        var manifest = TestData.Orders();
+        manifest.Root.Children[0].NaturalKey.Clear();
+
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.True);
+    }
+
+    [Test]
+    public void Reject_file_lookup_forces_the_job_transaction()
+    {
+        // rejectFile promises the whole file fails with nothing persisted; per-batch commits
+        // would leave every batch before the offending record in the target tables.
+        var manifest = TestData.Orders();
+        manifest.Root.Fields.First(f => f.Lookup is not null).Lookup!.OnMissing = LookupMissingPolicy.RejectFile;
+
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.True);
     }
 }

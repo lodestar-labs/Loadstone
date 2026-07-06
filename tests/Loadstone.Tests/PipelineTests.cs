@@ -79,6 +79,47 @@ public class ValidateStepTests
     }
 
     [Test]
+    public async Task Decimal_integer_overflow_is_a_row_error_not_a_job_abort()
+    {
+        // Total is decimal(18,6): 12 integer digits fit, 13 must be rejected here — if the
+        // value reaches SQL it raises arithmetic overflow and aborts the whole import.
+        var fits = OrderRecord(r => r.Raw["Total"] = "999999999999.99");
+        var overflows = OrderRecord(r => r.Raw["Total"] = "1234567890123.45");
+
+        await new ValidateStep().ExecuteAsync(Context(), fits);
+        await new ValidateStep().ExecuteAsync(Context(), overflows);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fits.HasErrors, Is.False);
+            Assert.That(overflows.HasErrors, Is.True);
+            Assert.That(overflows.Issues.Single().Field, Is.EqualTo("Total"));
+            Assert.That(overflows.Issues.Single().Message, Does.Contain("decimal(18,6)"));
+        });
+    }
+
+    [Test]
+    public async Task Natural_key_string_without_maxlength_is_checked_against_the_indexable_default()
+    {
+        // A string natural-key field with no maxLength gets an nvarchar(400) column; a longer
+        // value must fail validation here, not truncate/abort at merge time.
+        var manifest = TestData.Orders();
+        manifest.Root.Fields[0].MaxLength = null;   // OrderNumber, the natural key
+        var record = new DataRecord { Entity = manifest.Root };
+        record.Raw["OrderNumber"] = new string('x', FieldDefinition.IndexableStringDefaultLength + 1);
+        record.Raw["Total"] = "1";
+
+        await new ValidateStep().ExecuteAsync(Context(), record);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(record.HasErrors, Is.True);
+            Assert.That(record.Issues.Single().Field, Is.EqualTo("OrderNumber"));
+            Assert.That(record.Issues.Single().Message, Does.Contain($"{FieldDefinition.IndexableStringDefaultLength}"));
+        });
+    }
+
+    [Test]
     public async Task Errors_in_children_reject_the_tree_but_not_the_parent_record_itself()
     {
         var record = OrderRecord(r =>

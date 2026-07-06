@@ -35,20 +35,28 @@ public sealed class SqlServerImportWriter(
             return await WriteFlatStreamedAsync(context, acceptedRoots, cancellationToken);
         }
 
-        // Entities without a natural key insert unconditionally, so a retried job would
-        // duplicate whatever earlier batches already committed. For those datasets the
-        // whole job runs in one transaction — nothing is left behind for a retry to
-        // duplicate.
-        var anyEntityLacksNaturalKey = context.Manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0);
-        if (anyEntityLacksNaturalKey)
+        if (RequiresJobScopedTransaction(context.Manifest))
         {
             return await WriteJobScopedAsync(context, acceptedRoots, cancellationToken);
         }
 
-        // Every entity has a natural key, so merges are idempotent on re-import and the
-        // cheaper transaction-per-batch is safe.
+        // Every entity has a natural key and no lookup demands all-or-nothing, so merges
+        // are idempotent on re-import and the cheaper transaction-per-batch is safe.
         return await WriteBatchScopedAsync(context, acceptedRoots, cancellationToken);
     }
+
+    /// <summary>
+    /// Hierarchical datasets that must run in one job-wide transaction rather than a
+    /// transaction per batch:
+    /// - an entity without a natural key inserts unconditionally, so a retried job would
+    ///   duplicate whatever earlier batches already committed;
+    /// - a rejectFile lookup promises all-or-nothing — a rejection surfacing mid-file must
+    ///   not leave earlier, already-committed batches in the target tables.
+    /// </summary>
+    internal static bool RequiresJobScopedTransaction(DatasetManifest manifest) =>
+        manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0)
+        || manifest.EnumerateEntities().SelectMany(e => e.Fields)
+            .Any(f => f.Lookup is { OnMissing: LookupMissingPolicy.RejectFile });
 
     /// <summary>
     /// Accelerated single-entity path: bulk-copy the whole stream into one staging table,
