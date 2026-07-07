@@ -1,3 +1,7 @@
+---
+title: Recipes
+---
+
 # Recipes
 
 Practical patterns for the three most common inbound-data situations. Each recipe is a

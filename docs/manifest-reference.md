@@ -1,3 +1,7 @@
+---
+title: Dataset manifest reference
+---
+
 # Dataset manifest reference
 
 A dataset manifest is a JSON document that fully describes one import: the entity
