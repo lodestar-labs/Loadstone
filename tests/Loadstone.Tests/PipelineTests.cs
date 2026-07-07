@@ -99,6 +99,34 @@ public class ValidateStepTests
     }
 
     [Test]
+    public async Task Decimal_that_rounds_into_an_extra_integer_digit_is_rejected()
+    {
+        // decimal(4,2) holds at most 99.99. "99.999" truncates to 2 integer digits but SQL
+        // ROUNDS to scale on insert — 100.00 — which overflows and would abort the import.
+        var manifest = TestData.Orders();
+        var total = manifest.Root.Fields.First(f => f.Name == "Total");
+        total.Precision = 4;
+        total.Scale = 2;
+
+        var record = new DataRecord { Entity = manifest.Root };
+        record.Raw["OrderNumber"] = "A-1";
+        record.Raw["Total"] = "99.999";
+        var fits = new DataRecord { Entity = manifest.Root };
+        fits.Raw["OrderNumber"] = "A-2";
+        fits.Raw["Total"] = "99.994";   // rounds to 99.99 — still fits
+
+        await new ValidateStep().ExecuteAsync(Context(), record);
+        await new ValidateStep().ExecuteAsync(Context(), fits);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(record.HasErrors, Is.True, "99.999 rounds to 100.00 which overflows decimal(4,2)");
+            Assert.That(record.Issues.Single().Field, Is.EqualTo("Total"));
+            Assert.That(fits.HasErrors, Is.False, "99.994 rounds to 99.99 which fits");
+        });
+    }
+
+    [Test]
     public async Task Natural_key_string_without_maxlength_is_checked_against_the_indexable_default()
     {
         // A string natural-key field with no maxLength gets an nvarchar(400) column; a longer

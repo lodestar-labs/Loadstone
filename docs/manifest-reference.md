@@ -38,6 +38,7 @@ Property names are camelCase and case-insensitive. Enum values are camelCase str
 | --- | --- | --- | --- |
 | `formats` | string[] | all | Restrict accepted formats, e.g. `["xml", "csv"]`. |
 | `json.rootProperty` | string | – | Property holding the record array when the document is an object. |
+| `xml.rootElement` | string | – | Optional wrapper element containing the root-entity elements; when omitted, root-entity elements are matched by name at any depth. |
 | `csv.delimiter` | string (1 char) | `,` | Field delimiter. |
 | `csv.hasHeaderRow` | bool | `true` | First row is a header. Without it, columns map positionally to fields. |
 | `csv.keyColumn` | string | `_key` | Row key column in hierarchical (zip) uploads. |
@@ -98,10 +99,11 @@ code's integer id), not the raw source string.
 
 Policies:
 
-- **rejectRecord** — the record (and its subtree) goes to the rejection store; the rest
-  of the file imports. The safe default.
-- **rejectFile** — the whole import fails. For datasets where partial loads are worse
-  than no load.
+- **rejectRecord** — an error anywhere in a root record's tree diverts that **whole root
+  tree** (the record, its ancestors up to the root, and all their descendants) to the
+  rejection store; other root records in the file still import. The safe default.
+- **rejectFile** — the whole import fails, all-or-nothing; nothing is persisted. For
+  datasets where partial loads are worse than no load.
 - **useDefault** — resolve `default` instead (e.g. an `UNKNOWN` code).
 - **autoCreate** — add the value to the list and continue. Convenient for lists that are
   descriptive rather than authoritative.

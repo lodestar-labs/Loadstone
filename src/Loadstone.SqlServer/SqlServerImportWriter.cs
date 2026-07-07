@@ -51,12 +51,16 @@ public sealed class SqlServerImportWriter(
     /// - an entity without a natural key inserts unconditionally, so a retried job would
     ///   duplicate whatever earlier batches already committed;
     /// - a rejectFile lookup promises all-or-nothing — a rejection surfacing mid-file must
-    ///   not leave earlier, already-committed batches in the target tables.
+    ///   not leave earlier, already-committed batches in the target tables;
+    /// - an autoCreate lookup escalates to a file rejection when its provider cannot
+    ///   create entries (CreateAsync → NotSupportedException). That failure is
+    ///   deterministic — every retry stops at the same record — so on the per-batch path
+    ///   it would leave a permanently half-imported file.
     /// </summary>
     internal static bool RequiresJobScopedTransaction(DatasetManifest manifest) =>
         manifest.EnumerateEntities().Any(e => e.NaturalKey.Count == 0)
         || manifest.EnumerateEntities().SelectMany(e => e.Fields)
-            .Any(f => f.Lookup is { OnMissing: LookupMissingPolicy.RejectFile });
+            .Any(f => f.Lookup is { OnMissing: LookupMissingPolicy.RejectFile or LookupMissingPolicy.AutoCreate });
 
     /// <summary>
     /// Accelerated single-entity path: bulk-copy the whole stream into one staging table,

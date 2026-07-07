@@ -80,10 +80,13 @@ public sealed class ValidateStep : IImportStep
 
             // The target column is decimal(Precision,Scale); a value whose integer part needs
             // more digits than Precision-Scale would raise arithmetic overflow during bulk
-            // copy and abort the whole import instead of rejecting this one row.
+            // copy and abort the whole import instead of rejecting this one row. The digits
+            // are counted AFTER rounding to the column's scale, because SQL rounds on insert:
+            // 99.999 into decimal(4,2) becomes 100.00, which no longer fits.
             if (value is decimal number)
             {
-                var integerPart = decimal.Truncate(Math.Abs(number));
+                var scaled = Math.Round(Math.Abs(number), Math.Min(field.Scale, 28), MidpointRounding.AwayFromZero);
+                var integerPart = decimal.Truncate(scaled);
                 var integerDigits = integerPart == 0m
                     ? 0
                     : integerPart.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
@@ -92,7 +95,7 @@ public sealed class ValidateStep : IImportStep
                 {
                     record.AddError(
                         field.Name,
-                        $"Value has {integerDigits} integer digits; decimal({field.Precision},{field.Scale}) allows at most {allowedIntegerDigits}.",
+                        $"Value has {integerDigits} integer digits after rounding to scale {field.Scale}; decimal({field.Precision},{field.Scale}) allows at most {allowedIntegerDigits}.",
                         raw);
                     continue;
                 }

@@ -154,3 +154,32 @@ public class WriterTransactionScopeTests
         Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.True);
     }
 }
+
+[TestFixture]
+public class AutoCreateTransactionScopeTests
+{
+    [Test]
+    public void Auto_create_lookup_forces_the_job_transaction()
+    {
+        // autoCreate escalates to a file rejection when the provider can't create entries;
+        // that failure is deterministic, so per-batch commits would strand a permanent
+        // half-import. Those datasets must run in one job-wide transaction.
+        var manifest = TestData.Orders();
+        manifest.Root.Fields.First(f => f.Lookup is not null).Lookup!.OnMissing = LookupMissingPolicy.AutoCreate;
+
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.True);
+    }
+
+    [Test]
+    public void Reject_record_and_use_default_lookups_keep_batch_scope()
+    {
+        var manifest = TestData.Orders();
+        var lookup = manifest.Root.Fields.First(f => f.Lookup is not null).Lookup!;
+
+        lookup.OnMissing = LookupMissingPolicy.RejectRecord;
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.False);
+
+        lookup.OnMissing = LookupMissingPolicy.UseDefault;
+        Assert.That(SqlServerImportWriter.RequiresJobScopedTransaction(manifest), Is.False);
+    }
+}
